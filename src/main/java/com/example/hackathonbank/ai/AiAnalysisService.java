@@ -21,8 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AiAnalysisService {
@@ -63,8 +65,8 @@ public class AiAnalysisService {
     }
 
     @Transactional(readOnly = true)
-    public AiAnalyzeResponse analyze() {
-        AiDashboardResponse dashboard = forecastService.buildDashboard(10);
+    public AiAnalyzeResponse analyze(int offsetDays) {
+        AiDashboardResponse dashboard = forecastService.buildDashboard(offsetDays);
         List<Transaction> transactions = transactionService.getTransactionsForCurrentUser();
         List<ScheduledPayment> pendingPayments = scheduledPaymentService.getPendingPayments();
         EnrichmentSummary enrichmentSummary = transactionEnrichmentService.enrich(
@@ -72,9 +74,6 @@ public class AiAnalysisService {
                 pendingPayments,
                 dashboard.minimumProjectedBalance()
         );
-        if (enrichmentSummary == null) {
-            throw new IllegalStateException("AI enrichment summary was not generated.");
-        }
 
         if (dashboard.minimumProjectedBalance().compareTo(BigDecimal.ZERO) >= 0) {
             return new AiAnalyzeResponse(false, enrichmentSummary.reasoning(), null);
@@ -82,29 +81,34 @@ public class AiAnalysisService {
 
         BigDecimal gapAmount = dashboard.minimumProjectedBalance().abs();
         BigDecimal savingsBalance = accountService.getAccountByType(AccountType.SAVINGS).getBalance();
-        ScheduledPayment nextPayment = pendingPayments.stream().findFirst().orElse(null);
+        List<ScheduledPayment> riskyPayments = selectRiskyPayments(pendingPayments, dashboard.horizonDays());
+        ScheduledPayment criticalPayment = selectCriticalPayment(riskyPayments, dashboard.currentBalance());
 
         PendingAiAction action;
         if (savingsBalance.compareTo(gapAmount) >= 0) {
             action = new PendingAiAction(
                     UUID.randomUUID().toString(),
                     AgentActionType.AUTO_TRANSFER,
-                    buildTransferMessage(gapAmount, nextPayment, enrichmentSummary),
+                    buildTransferMessage(gapAmount, criticalPayment, riskyPayments, enrichmentSummary),
                     gapAmount,
                     null,
                     LocalDateTime.now()
             );
-        } else if (nextPayment != null) {
+        } else if (criticalPayment != null) {
             action = new PendingAiAction(
                     UUID.randomUUID().toString(),
                     AgentActionType.POSTPONE_PAYMENT,
-                    buildPostponeMessage(nextPayment, enrichmentSummary),
+                    buildPostponeMessage(criticalPayment, riskyPayments, enrichmentSummary),
                     null,
-                    nextPayment.getId(),
+                    criticalPayment.getId(),
                     LocalDateTime.now()
             );
         } else {
-            return new AiAnalyzeResponse(true, "Найден риск кассового разрыва, но подходящее действие не определено.", null);
+            return new AiAnalyzeResponse(
+                    true,
+                    "Найден риск кассового разрыва, но подходящее действие не определено.",
+                    null
+            );
         }
 
         pendingActionRegistry.register(action);
@@ -164,37 +168,101 @@ public class AiAnalysisService {
                     "Подтвержденное действие: вызови autoTransferFromSavings с amount=%s и закрой кассовый разрыв."
                             .formatted(action.amount().toPlainString());
             case POSTPONE_PAYMENT ->
-                    "Подтвержденное действие: вызови postponePayment с paymentId=%d и отложи ближайший обязательный платеж."
+                    "Подтвержденное действие: вызови postponePayment с paymentId=%d и перенеси критичный обязательный платеж."
                             .formatted(action.paymentId());
         };
     }
 
     private String fallbackExecutionMessage(PendingAiAction action) {
         return switch (action.actionType()) {
-            case AUTO_TRANSFER -> "AI-резерв выполнен.";
+            case AUTO_TRANSFER -> "Перевод из сбережений выполнен.";
             case POSTPONE_PAYMENT -> "Платеж перенесен.";
         };
     }
 
-    private String buildTransferMessage(BigDecimal gapAmount,
-                                        ScheduledPayment nextPayment,
-                                        EnrichmentSummary enrichmentSummary) {
-        String reasoning = enrichmentSummary != null && enrichmentSummary.reasoning() != null
-                ? enrichmentSummary.reasoning()
-                : "Обнаружен риск кассового разрыва по регулярным расходам.";
-        String paymentPart = nextPayment == null
-                ? "Ближайшая просадка уводит основной счет в минус."
-                : "Платеж \"%s\" на %s KGS через %s дн. уводит основной счет в минус."
-                .formatted(nextPayment.getTitle(), nextPayment.getAmount().toPlainString(), nextPayment.getDueDate().toEpochDay() - LocalDate.now().toEpochDay());
-        return "%s %s Рекомендую перевести %s KGS со счета сбережений."
-                .formatted(paymentPart, reasoning, gapAmount.toPlainString());
+    private List<ScheduledPayment> selectRiskyPayments(List<ScheduledPayment> pendingPayments, int horizonDays) {
+        LocalDate horizonDate = LocalDate.now().plusDays(Math.max(0, horizonDays));
+        return pendingPayments.stream()
+                .filter(payment -> !payment.getDueDate().isAfter(horizonDate))
+                .sorted(
+                        Comparator.comparing(ScheduledPayment::getDueDate)
+                                .thenComparing(ScheduledPayment::getAmount, Comparator.reverseOrder())
+                )
+                .toList();
     }
 
-    private String buildPostponeMessage(ScheduledPayment nextPayment, EnrichmentSummary enrichmentSummary) {
-        String reasoning = enrichmentSummary != null && enrichmentSummary.reasoning() != null
-                ? enrichmentSummary.reasoning()
-                : "Обнаружен риск кассового разрыва по регулярным расходам.";
-        return "На счете сбережений уже недостаточно средств, чтобы покрыть \"%s\" на %s KGS. %s Рекомендую перенести платеж."
-                .formatted(nextPayment.getTitle(), nextPayment.getAmount().toPlainString(), reasoning);
+    private ScheduledPayment selectCriticalPayment(List<ScheduledPayment> riskyPayments, BigDecimal currentBalance) {
+        if (riskyPayments.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal runningBalance = currentBalance;
+        ScheduledPayment latestCandidate = riskyPayments.get(0);
+        for (ScheduledPayment payment : riskyPayments) {
+            runningBalance = runningBalance.subtract(payment.getAmount());
+            latestCandidate = payment;
+            if (runningBalance.compareTo(BigDecimal.ZERO) < 0) {
+                return payment;
+            }
+        }
+        return latestCandidate;
+    }
+
+    private String buildTransferMessage(BigDecimal gapAmount,
+                                        ScheduledPayment criticalPayment,
+                                        List<ScheduledPayment> riskyPayments,
+                                        EnrichmentSummary enrichmentSummary) {
+        String reasoning = normalizeReasoning(enrichmentSummary);
+        String paymentPart = criticalPayment == null
+                ? "В ближайшем горизонте есть обязательные списания, которые уводят основной счет в минус."
+                : "Критичное списание \"%s\" на %s KGS назначено на %s."
+                .formatted(
+                        criticalPayment.getTitle(),
+                        criticalPayment.getAmount().toPlainString(),
+                        criticalPayment.getDueDate()
+                );
+        String stackPart = summarizePayments(riskyPayments, criticalPayment);
+        return "%s %s %s Рекомендую перевести %s KGS со счета сбережений."
+                .formatted(paymentPart, stackPart, reasoning, gapAmount.toPlainString())
+                .trim();
+    }
+
+    private String buildPostponeMessage(ScheduledPayment criticalPayment,
+                                        List<ScheduledPayment> riskyPayments,
+                                        EnrichmentSummary enrichmentSummary) {
+        String reasoning = normalizeReasoning(enrichmentSummary);
+        String stackPart = summarizePayments(riskyPayments, criticalPayment);
+        return "Подушки на счете сбережений уже недостаточно, чтобы покрыть \"%s\" на %s KGS. %s %s Рекомендую перенести именно этот платеж."
+                .formatted(
+                        criticalPayment.getTitle(),
+                        criticalPayment.getAmount().toPlainString(),
+                        stackPart,
+                        reasoning
+                )
+                .trim();
+    }
+
+    private String summarizePayments(List<ScheduledPayment> riskyPayments, ScheduledPayment criticalPayment) {
+        List<ScheduledPayment> supportingPayments = riskyPayments.stream()
+                .filter(payment -> criticalPayment == null || !payment.getId().equals(criticalPayment.getId()))
+                .limit(2)
+                .toList();
+        if (supportingPayments.isEmpty()) {
+            return "";
+        }
+        String summary = supportingPayments.stream()
+                .map(payment -> "\"%s\" %s KGS %s".formatted(
+                        payment.getTitle(),
+                        payment.getAmount().toPlainString(),
+                        payment.getDueDate()))
+                .collect(Collectors.joining(", "));
+        return "Следом идут: %s.".formatted(summary);
+    }
+
+    private String normalizeReasoning(EnrichmentSummary enrichmentSummary) {
+        if (enrichmentSummary == null || enrichmentSummary.reasoning() == null || enrichmentSummary.reasoning().isBlank()) {
+            return "Регулярные расходы и запланированные списания создают риск кассового разрыва.";
+        }
+        return enrichmentSummary.reasoning();
     }
 }

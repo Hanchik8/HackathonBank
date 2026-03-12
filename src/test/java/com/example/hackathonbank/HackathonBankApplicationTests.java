@@ -2,6 +2,7 @@ package com.example.hackathonbank;
 
 import com.example.hackathonbank.ai.PendingActionRegistry;
 import com.example.hackathonbank.controller.dto.ExternalTransferRequest;
+import com.example.hackathonbank.controller.dto.ScheduledPaymentRequest;
 import com.example.hackathonbank.controller.dto.TransferRequest;
 import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.TransferRecipientType;
@@ -15,8 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 
@@ -140,8 +141,37 @@ class HackathonBankApplicationTests {
     }
 
     @Test
+    void createScheduledPaymentEndpointCreatesPaymentAndLedgerEntry() throws Exception {
+        var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
+
+        mockMvc.perform(post("/api/v1/scheduled-payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ScheduledPaymentRequest(
+                                mainAccount.getId(),
+                                "Интернет",
+                                "HomeNet",
+                                "Подписки",
+                                new BigDecimal("3900.00"),
+                                java.time.LocalDate.now().plusDays(5)
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Интернет"))
+                .andExpect(jsonPath("$.counterparty").value("HomeNet"))
+                .andExpect(jsonPath("$.iconKey").value("subscription"))
+                .andExpect(jsonPath("$.status").value("SCHEDULED"));
+
+        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L))
+                .extracting(transaction -> transaction.getTitle())
+                .contains("Автоплатеж: Интернет");
+    }
+
+    @Test
     void analyzeReturnsAlertForUpcomingCashGapWithoutLegacyCurrency() throws Exception {
-        mockMvc.perform(post("/api/v1/ai/analyze"))
+        mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":10}
+                                """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hasAlert").value(true))
                 .andExpect(jsonPath("$.message", not(containsString("KZT"))))
@@ -149,8 +179,50 @@ class HackathonBankApplicationTests {
     }
 
     @Test
+    void analyzeRespectsOffsetDaysAndSkipsAlertOutsidePaymentWindow() throws Exception {
+        mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":0}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAlert").value(false))
+                .andExpect(jsonPath("$.actionToken").isEmpty());
+    }
+
+    @Test
+    void analyzeReactsToNonRentScheduledPayment() throws Exception {
+        var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
+
+        mockMvc.perform(post("/api/v1/scheduled-payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ScheduledPaymentRequest(
+                                mainAccount.getId(),
+                                "Страховка авто",
+                                "Insurance Co",
+                                "Страховка",
+                                new BigDecimal("48000.00"),
+                                java.time.LocalDate.now().plusDays(3)
+                        ))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":10}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAlert").value(true))
+                .andExpect(jsonPath("$.message", containsString("Страховка авто")));
+    }
+
+    @Test
     void executeUsesSuggestedActionAndUpdatesBalances() throws Exception {
-        String analyzeResponse = mockMvc.perform(post("/api/v1/ai/analyze"))
+        String analyzeResponse = mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":10}
+                                """))
                 .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()

@@ -42,7 +42,7 @@ class _AppShellState extends State<AppShell> {
     });
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Открыл оплату магазину.')));
+    ).showSnackBar(const SnackBar(content: Text('Merchant payment opened.')));
   }
 
   @override
@@ -61,9 +61,8 @@ class _AppShellState extends State<AppShell> {
         preferredMode: _preferredTransferMode,
       ),
       const PlaceholderScreen(
-        title: 'Еще',
-        subtitle:
-            'Настройки, история уведомлений и профиль соберем в этом разделе.',
+        title: 'More',
+        subtitle: 'Settings, notifications and profile can live here later.',
       ),
     ];
 
@@ -139,28 +138,26 @@ class _MbankBottomBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: <Widget>[
             _NavItem(
-              label: 'Главная',
+              label: 'Home',
               icon: Icons.home_rounded,
               active: currentIndex == 0,
               onTap: () => onSelect(0),
             ),
             _NavItem(
-              label: 'Анализ',
+              label: 'AI',
               icon: Icons.bar_chart_rounded,
               active: currentIndex == 1,
               onTap: () => onSelect(1),
             ),
             _QrActionButton(onTap: onQrTap),
             _NavItem(
-              label: 'Платежи',
+              label: 'Pay',
               icon: Icons.swap_horiz_rounded,
               active: currentIndex == 2,
-              onTap: () {
-                onSelect(2);
-              },
+              onTap: () => onSelect(2),
             ),
             _NavItem(
-              label: 'Еще',
+              label: 'More',
               icon: Icons.more_horiz_rounded,
               active: currentIndex == 3,
               onTap: () => onSelect(3),

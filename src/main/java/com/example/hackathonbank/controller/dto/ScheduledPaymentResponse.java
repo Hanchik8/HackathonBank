@@ -1,9 +1,9 @@
-package com.example.hackathonbank.ai.dto;
+package com.example.hackathonbank.controller.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-public record ScheduledPaymentSnapshot(
+public record ScheduledPaymentResponse(
         Long id,
         Long accountId,
         String accountName,

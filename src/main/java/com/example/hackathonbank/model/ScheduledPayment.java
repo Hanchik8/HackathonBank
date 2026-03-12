@@ -34,11 +34,17 @@ public class ScheduledPayment {
     @Column(nullable = false)
     private String title;
 
+    @Column(nullable = false)
+    private String counterparty;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
     @Column(nullable = false)
     private String category;
+
+    @Column(nullable = false)
+    private String iconKey;
 
     @Column(nullable = false)
     private LocalDate dueDate;
@@ -57,11 +63,25 @@ public class ScheduledPayment {
                             String category,
                             LocalDate dueDate,
                             PaymentStatus status) {
+        this(user, account, title, title, amount, category, "calendar", dueDate, status);
+    }
+
+    public ScheduledPayment(User user,
+                            Account account,
+                            String title,
+                            String counterparty,
+                            BigDecimal amount,
+                            String category,
+                            String iconKey,
+                            LocalDate dueDate,
+                            PaymentStatus status) {
         this.user = user;
         this.account = account;
         this.title = title;
+        this.counterparty = counterparty;
         this.amount = amount;
         this.category = category;
+        this.iconKey = iconKey;
         this.dueDate = dueDate;
         this.status = status;
     }
@@ -82,12 +102,20 @@ public class ScheduledPayment {
         return title;
     }
 
+    public String getCounterparty() {
+        return counterparty;
+    }
+
     public BigDecimal getAmount() {
         return amount;
     }
 
     public String getCategory() {
         return category;
+    }
+
+    public String getIconKey() {
+        return iconKey;
     }
 
     public LocalDate getDueDate() {

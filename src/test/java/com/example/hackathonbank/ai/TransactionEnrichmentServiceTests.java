@@ -123,7 +123,7 @@ class TransactionEnrichmentServiceTests {
 
         assertThat(summary.groups()).hasSize(3);
         assertThat(summary.riskLevel()).isEqualTo("HIGH");
-        assertThat(summary.reasoning()).contains("Регулярные расходы");
+        assertThat(summary.reasoning()).contains("запланированные списания");
         assertThat(summary.groups().get(0).name()).isEqualTo("Базовые потребности");
         assertThat(summary.groups().get(1).total()).isEqualByComparingTo("25990.00");
         assertThat(summary.groups().get(2).total()).isEqualByComparingTo("1500.00");
@@ -159,7 +159,7 @@ class TransactionEnrichmentServiceTests {
         );
 
         assertThat(summary).isNotNull();
-        assertThat(summary.reasoning()).contains("Регулярные расходы");
+        assertThat(summary.reasoning()).contains("запланированные списания");
         assertThat(summary.groups()).hasSize(3);
     }
 }

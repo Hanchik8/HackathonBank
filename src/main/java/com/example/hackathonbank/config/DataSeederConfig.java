@@ -39,7 +39,7 @@ public class DataSeederConfig {
             Account mainAccount = accountRepository.save(
                     new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS")
             );
-            Account savingsAccount = accountRepository.save(
+            accountRepository.save(
                     new Account(user, AccountType.SAVINGS, "Savings", new BigDecimal("50000.00"), "KGS")
             );
 
@@ -52,7 +52,7 @@ public class DataSeederConfig {
             transactions.add(transaction(user, mainAccount, null, "Такси", "Yandex Go", "-2200.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(15)));
             transactions.add(transaction(user, mainAccount, null, "Кино", "Kinoplexx", "-4800.00", "Развлечения", "entertainment", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(14)));
             transactions.add(transaction(user, mainAccount, null, "Интернет", "HomeNet", "-3900.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(13)));
-            transactions.add(transaction(user, mainAccount, null, "Аптека", "Europharma", "-2800.00", "Еда", "health", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(12)));
+            transactions.add(transaction(user, mainAccount, null, "Аптека", "Europharma", "-2800.00", "Здоровье", "health", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(12)));
             transactions.add(transaction(user, mainAccount, null, "АЗС", "Sinooil", "-9000.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(11)));
             transactions.add(transaction(user, mainAccount, null, "Фриланс", "Freelance client", "35000.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(10)));
             transactions.add(transaction(user, mainAccount, null, "Ресторан", "Pinsa", "-7200.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(9)));
@@ -67,7 +67,17 @@ public class DataSeederConfig {
             transactions.add(transaction(user, mainAccount, null, "Покупка техники", "TechnoDom", "-12990.00", "Покупки", "shopping", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusHours(6)));
 
             ScheduledPayment rentPayment = scheduledPaymentRepository.save(
-                    new ScheduledPayment(user, mainAccount, "Аренда", new BigDecimal("25000.00"), "Аренда", LocalDate.now().plusDays(4), PaymentStatus.SCHEDULED)
+                    new ScheduledPayment(
+                            user,
+                            mainAccount,
+                            "Аренда",
+                            "Landlord",
+                            new BigDecimal("25000.00"),
+                            "Аренда",
+                            "home",
+                            LocalDate.now().plusDays(4),
+                            PaymentStatus.SCHEDULED
+                    )
             );
             transactions.add(transaction(user, mainAccount, rentPayment, "Автоплатеж: Аренда", "Landlord", "-25000.00", "Аренда", "home", TransactionType.AUTO_PAYMENT, TransactionStatus.SCHEDULED, rentPayment.getDueDate().atTime(9, 0)));
 

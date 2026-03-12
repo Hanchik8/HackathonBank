@@ -71,6 +71,7 @@ public class TransactionEnrichmentService {
                                 transaction.getTitle(),
                                 transaction.getAmount(),
                                 transaction.getCategory(),
+                                transaction.getCounterparty(),
                                 transaction.getOccurredAt().toString()
                         ))
                         .toList()
@@ -80,6 +81,8 @@ public class TransactionEnrichmentService {
                         .map(payment -> new PromptPayment(
                                 payment.getId(),
                                 payment.getTitle(),
+                                payment.getCounterparty(),
+                                payment.getCategory(),
                                 payment.getAmount(),
                                 payment.getDueDate().toString()
                         ))
@@ -131,7 +134,7 @@ public class TransactionEnrichmentService {
 
             if (containsAny(normalized, "продукт", "еда", "кофе", "такси", "автобус", "транспорт", "азс", "аптек")) {
                 basic.add(absoluteAmount, transaction.getCategory());
-            } else if (containsAny(normalized, "аренда", "подпис", "интернет", "мобиль")) {
+            } else if (containsAny(normalized, "аренда", "подпис", "интернет", "мобиль", "коммун", "страхов")) {
                 regular.add(absoluteAmount, transaction.getCategory());
             } else {
                 dynamic.add(absoluteAmount, transaction.getCategory());
@@ -139,13 +142,20 @@ public class TransactionEnrichmentService {
         }
 
         for (ScheduledPayment scheduledPayment : scheduledPayments) {
-            regular.add(scheduledPayment.getAmount(), scheduledPayment.getTitle());
+            String normalized = (scheduledPayment.getTitle() + " " + scheduledPayment.getCategory()).toLowerCase(Locale.ROOT);
+            if (containsAny(normalized, "еда", "такси", "транспорт")) {
+                basic.add(scheduledPayment.getAmount(), scheduledPayment.getTitle());
+            } else if (containsAny(normalized, "аренда", "подпис", "интернет", "коммун", "страхов", "кредит", "ипотек")) {
+                regular.add(scheduledPayment.getAmount(), scheduledPayment.getTitle());
+            } else {
+                dynamic.add(scheduledPayment.getAmount(), scheduledPayment.getTitle());
+            }
         }
 
         String riskLevel = minimumProjectedBalance.compareTo(BigDecimal.ZERO) < 0 ? "HIGH" : "LOW";
         String reasoning = minimumProjectedBalance.compareTo(BigDecimal.ZERO) < 0
-                ? "Регулярные расходы и ближайшая аренда делают основной счет отрицательным. Нужен перенос платежа или подпитка сбережениями."
-                : "Даже с учетом регулярных расходов основной счет остается положительным.";
+                ? "Регулярные расходы и ближайшие запланированные списания уводят основной счет в минус. Нужен перенос платежа или подпитка сбережениями."
+                : "Даже с учетом запланированных списаний основной счет остается положительным.";
 
         List<EnrichmentGroup> groups = List.of(
                 basic.toGroup(BASIC),
@@ -164,10 +174,23 @@ public class TransactionEnrichmentService {
         return false;
     }
 
-    private record PromptTransaction(String title, BigDecimal amount, String category, String occurredAt) {
+    private record PromptTransaction(
+            String title,
+            BigDecimal amount,
+            String category,
+            String counterparty,
+            String occurredAt
+    ) {
     }
 
-    private record PromptPayment(Long id, String title, BigDecimal amount, String dueDate) {
+    private record PromptPayment(
+            Long id,
+            String title,
+            String counterparty,
+            String category,
+            BigDecimal amount,
+            String dueDate
+    ) {
     }
 
     private static final class GroupAccumulator {
@@ -192,7 +215,11 @@ public class TransactionEnrichmentService {
             if (resultPatterns.isEmpty()) {
                 resultPatterns.addAll(fallbackPatterns);
             }
-            return new EnrichmentGroup(name, total.setScale(2, RoundingMode.HALF_UP), resultPatterns.stream().limit(4).toList());
+            return new EnrichmentGroup(
+                    name,
+                    total.setScale(2, RoundingMode.HALF_UP),
+                    resultPatterns.stream().limit(4).toList()
+            );
         }
     }
 }

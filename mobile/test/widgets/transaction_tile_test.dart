@@ -6,7 +6,7 @@ import 'package:hackathon_bank_mobile/widgets/transaction_tile.dart';
 import '../test_support/fake_bank_api_service.dart';
 
 void main() {
-  testWidgets('renders localized account label and formatted date', (
+  testWidgets('renders account label and formatted date', (
     WidgetTester tester,
   ) async {
     final transaction = sampleTransactions().first;
@@ -19,7 +19,7 @@ void main() {
     );
 
     expect(find.text('Продукты'), findsOneWidget);
-    expect(find.textContaining('Основной счет'), findsOneWidget);
-    expect(find.textContaining('12 мар, 09:05'), findsOneWidget);
+    expect(find.textContaining('Main account'), findsOneWidget);
+    expect(find.textContaining('12 Mar, 09:05'), findsOneWidget);
   });
 }

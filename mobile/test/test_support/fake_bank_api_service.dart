@@ -93,8 +93,41 @@ List<TransactionModel> sampleTransactions() {
   ];
 }
 
-AiDashboardModel sampleDashboard() {
+List<ScheduledPaymentModel> sampleScheduledPayments() {
   final today = DateTime.now();
+  return <ScheduledPaymentModel>[
+    ScheduledPaymentModel(
+      id: 10,
+      accountId: 1,
+      accountName: 'Main',
+      title: 'Аренда',
+      counterparty: 'Landlord',
+      category: 'Аренда',
+      iconKey: 'home',
+      amount: 25000,
+      dueDate: today.add(const Duration(days: 4)),
+      status: 'SCHEDULED',
+    ),
+    ScheduledPaymentModel(
+      id: 11,
+      accountId: 1,
+      accountName: 'Main',
+      title: 'Интернет',
+      counterparty: 'HomeNet',
+      category: 'Подписки',
+      iconKey: 'subscription',
+      amount: 3900,
+      dueDate: today.add(const Duration(days: 6)),
+      status: 'SCHEDULED',
+    ),
+  ];
+}
+
+AiDashboardModel sampleDashboard([
+  List<ScheduledPaymentModel>? scheduledPayments,
+]) {
+  final today = DateTime.now();
+  final payments = scheduledPayments ?? sampleScheduledPayments();
   return AiDashboardModel(
     currentBalance: 15000,
     savingsBalance: 50000,
@@ -109,15 +142,7 @@ AiDashboardModel sampleDashboard() {
         balance: 15000 - (index * 2500),
       ),
     ),
-    scheduledPayments: <ScheduledPaymentModel>[
-      ScheduledPaymentModel(
-        id: 10,
-        title: 'Аренда',
-        amount: 25000,
-        dueDate: today.add(const Duration(days: 4)),
-        status: 'SCHEDULED',
-      ),
-    ],
+    scheduledPayments: payments,
   );
 }
 
@@ -169,29 +194,36 @@ class FakeBankApiService extends BankApiService {
     TransferResultModel? internalTransferResult,
   }) : _accounts = accounts ?? sampleAccounts(),
        _transactions = transactions ?? sampleTransactions(),
-       _dashboard = dashboard ?? sampleDashboard(),
        _analysis = analysis ?? sampleAnalysis(),
        _execution = execution ?? sampleExecution(),
        _transferResult = transferResult ?? sampleTransferResult(),
        _internalTransferResult =
            internalTransferResult ?? sampleInternalTransferResult(),
+       _scheduledPayments = List<ScheduledPaymentModel>.from(
+         (dashboard ?? sampleDashboard()).scheduledPayments,
+       ),
+       _dashboardTemplate = dashboard ?? sampleDashboard(),
        super(apiClient: _NoopApiClient());
 
   final List<AccountModel> _accounts;
   final List<TransactionModel> _transactions;
-  final AiDashboardModel _dashboard;
+  final AiDashboardModel _dashboardTemplate;
   final AiAnalysisModel _analysis;
   final AiExecutionModel _execution;
   final TransferResultModel _transferResult;
   final TransferResultModel _internalTransferResult;
+  final List<ScheduledPaymentModel> _scheduledPayments;
 
   final List<int> dashboardRequests = <int>[];
+  final List<int> analyzeRequests = <int>[];
   int executeCalls = 0;
   String? lastActionToken;
   int internalTransferCalls = 0;
   Map<String, Object?>? lastInternalTransfer;
   int externalTransferCalls = 0;
   Map<String, Object?>? lastExternalTransfer;
+  int createScheduledPaymentCalls = 0;
+  Map<String, Object?>? lastScheduledPaymentDraft;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -202,17 +234,60 @@ class FakeBankApiService extends BankApiService {
   @override
   Future<AiDashboardModel> fetchDashboard(int offsetDays) async {
     dashboardRequests.add(offsetDays);
-    return _dashboard;
+    final sortedPayments = List<ScheduledPaymentModel>.from(_scheduledPayments)
+      ..sort((left, right) => left.dueDate.compareTo(right.dueDate));
+    return _dashboardTemplate.copyWith(scheduledPayments: sortedPayments);
   }
 
   @override
-  Future<AiAnalysisModel> analyzeCashFlow() async => _analysis;
+  Future<AiAnalysisModel> analyzeCashFlow(int offsetDays) async {
+    analyzeRequests.add(offsetDays);
+    return _analysis;
+  }
 
   @override
   Future<AiExecutionModel> executeAction(String actionToken) async {
     executeCalls += 1;
     lastActionToken = actionToken;
     return _execution;
+  }
+
+  @override
+  Future<ScheduledPaymentModel> createScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+  }) async {
+    createScheduledPaymentCalls += 1;
+    lastScheduledPaymentDraft = <String, Object?>{
+      'accountId': accountId,
+      'title': title,
+      'counterparty': counterparty,
+      'category': category,
+      'amount': amount,
+      'dueDate': dueDate,
+    };
+    final account = _accounts.firstWhere((item) => item.id == accountId);
+    final payment = ScheduledPaymentModel(
+      id: 100 + createScheduledPaymentCalls,
+      accountId: accountId,
+      accountName: account.name,
+      title: title,
+      counterparty: counterparty,
+      category: category,
+      iconKey: 'calendar',
+      amount: amount,
+      dueDate: dueDate,
+      status: 'SCHEDULED',
+    );
+    _scheduledPayments.add(payment);
+    _scheduledPayments.sort(
+      (left, right) => left.dueDate.compareTo(right.dueDate),
+    );
+    return payment;
   }
 
   @override

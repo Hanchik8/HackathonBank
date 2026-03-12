@@ -54,7 +54,12 @@ void main() {
       'scheduledPayments': <Map<String, dynamic>>[
         <String, dynamic>{
           'id': 10,
+          'accountId': 1,
+          'accountName': 'Main',
           'title': 'Аренда',
+          'counterparty': 'Landlord',
+          'category': 'Аренда',
+          'iconKey': 'home',
           'amount': 25000,
           'dueDate': '2026-03-16',
           'status': 'SCHEDULED',
@@ -75,6 +80,7 @@ void main() {
 
     expect(dashboard.points.single.balance, 15000);
     expect(dashboard.scheduledPayments.single.title, 'Аренда');
+    expect(dashboard.scheduledPayments.single.accountName, 'Main');
     expect(analysis.hasAlert, isTrue);
     expect(execution.success, isTrue);
   });

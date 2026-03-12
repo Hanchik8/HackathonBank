@@ -15,6 +15,7 @@ class ForecastChart extends StatelessWidget {
     final spots = points
         .map((point) => FlSpot(point.dayOffset.toDouble(), point.balance))
         .toList();
+    final bottomTitleInterval = dashboard.horizonDays > 4 ? 2.0 : 1.0;
     final minY =
         points
             .map((point) => point.balance)
@@ -47,13 +48,23 @@ class ForecastChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              interval: 1,
               reservedSize: 24,
               getTitlesWidget: (value, meta) {
-                final index = value.round();
+                final roundedValue = value.roundToDouble();
+                if ((value - roundedValue).abs() > 0.001) {
+                  return const SizedBox.shrink();
+                }
+                final index = roundedValue.toInt();
                 if (index < 0 || index >= points.length) {
                   return const SizedBox.shrink();
                 }
-                if (index.isOdd && dashboard.horizonDays > 4) {
+                final shouldShow =
+                    dashboard.horizonDays <= 4 ||
+                    index == 0 ||
+                    index == dashboard.horizonDays ||
+                    index % bottomTitleInterval.toInt() == 0;
+                if (!shouldShow) {
                   return const SizedBox.shrink();
                 }
                 return Padding(

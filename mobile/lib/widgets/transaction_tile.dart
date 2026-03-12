@@ -91,8 +91,8 @@ class TransactionTile extends StatelessWidget {
 
   String get _accountLabel {
     return switch (transaction.accountName) {
-      'Main' => 'Основной счет',
-      'Savings' => 'Сбережения',
+      'Main' => 'Main account',
+      'Savings' => 'Savings',
       _ => transaction.accountName,
     };
   }
