@@ -47,7 +47,7 @@ void main() {
         <String, dynamic>{
           'dayOffset': 0,
           'isoDate': '2026-03-12',
-          'label': '12 мар',
+          'label': '12 мар.',
           'balance': 15000,
         },
       ],

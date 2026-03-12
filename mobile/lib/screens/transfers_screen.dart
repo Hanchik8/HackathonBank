@@ -103,11 +103,11 @@ class _TransfersScreenState extends State<TransfersScreen> {
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.'));
 
     if (recipientName.isEmpty) {
-      _showMessage('Enter recipient.');
+      _showMessage('Укажите получателя.');
       return;
     }
     if (amount == null || amount <= 0) {
-      _showMessage('Enter a valid amount.');
+      _showMessage('Введите корректную сумму.');
       return;
     }
 
@@ -169,22 +169,22 @@ class _TransfersScreenState extends State<TransfersScreen> {
 
   String get _screenTitle {
     return switch (_mode) {
-      TransferRecipientMode.user => 'Transfer to user',
-      TransferRecipientMode.merchant => 'Pay merchant',
+      TransferRecipientMode.user => 'Перевод пользователю',
+      TransferRecipientMode.merchant => 'Оплата магазину',
     };
   }
 
   String get _recipientLabel {
     return switch (_mode) {
-      TransferRecipientMode.user => 'Name or phone',
-      TransferRecipientMode.merchant => 'Merchant name',
+      TransferRecipientMode.user => 'Имя или телефон',
+      TransferRecipientMode.merchant => 'Название магазина',
     };
   }
 
   String get _submitLabel {
     return switch (_mode) {
-      TransferRecipientMode.user => 'Send',
-      TransferRecipientMode.merchant => 'Pay',
+      TransferRecipientMode.user => 'Перевести',
+      TransferRecipientMode.merchant => 'Оплатить',
     };
   }
 
@@ -219,7 +219,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
         children: <Widget>[
           Text(
-            'Payments',
+            'Платежи',
             style: Theme.of(
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
@@ -242,7 +242,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'The money will be debited immediately after confirmation.',
+                  'Деньги спишутся сразу после подтверждения.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.secondaryText,
                   ),
@@ -252,7 +252,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
                   children: <Widget>[
                     Expanded(
                       child: _ModeChip(
-                        label: 'User',
+                        label: 'Пользователь',
                         selected: _mode == TransferRecipientMode.user,
                         onTap: () => setState(() {
                           _mode = TransferRecipientMode.user;
@@ -262,7 +262,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _ModeChip(
-                        label: 'Merchant',
+                        label: 'Магазин',
                         selected: _mode == TransferRecipientMode.merchant,
                         onTap: () => setState(() {
                           _mode = TransferRecipientMode.merchant;
@@ -276,13 +276,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
                   initialValue: _selectedAccountId,
                   isExpanded: true,
                   dropdownColor: AppTheme.surfaceSoft,
-                  decoration: _inputDecoration('Debit account'),
+                  decoration: _inputDecoration('Счет списания'),
                   items: accounts
                       .map(
                         (account) => DropdownMenuItem<int>(
                           value: account.id,
                           child: Text(
-                            '${account.name} • ${SomFormatter.amount(account.balance)}',
+                            '${_displayAccountName(account.name)} \u2022 ${SomFormatter.amount(account.balance)}',
                           ),
                         ),
                       )
@@ -302,12 +302,12 @@ class _TransfersScreenState extends State<TransfersScreen> {
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  decoration: _inputDecoration('Amount in KGS'),
+                  decoration: _inputDecoration('Сумма в KGS'),
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: _noteController,
-                  decoration: _inputDecoration('Comment'),
+                  decoration: _inputDecoration('Комментарий'),
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -369,6 +369,14 @@ class _TransfersScreenState extends State<TransfersScreen> {
         borderSide: const BorderSide(color: AppTheme.accent),
       ),
     );
+  }
+
+  String _displayAccountName(String name) {
+    return switch (name) {
+      'Main' => 'Основной счет',
+      'Savings' => 'Сбережения',
+      _ => name,
+    };
   }
 }
 
@@ -435,7 +443,7 @@ class _SourceAccountPreview extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: const Text(
-              'K',
+              'С',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -449,7 +457,11 @@ class _SourceAccountPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  account.name,
+                  switch (account.name) {
+                    'Main' => 'Основной счет',
+                    'Savings' => 'Сбережения',
+                    _ => account.name,
+                  },
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),

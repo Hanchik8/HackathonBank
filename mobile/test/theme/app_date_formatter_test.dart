@@ -7,6 +7,6 @@ void main() {
       DateTime(2026, 3, 12, 9, 5),
     );
 
-    expect(formatted, '12 Mar, 09:05');
+    expect(formatted, '12 мар., 09:05');
   });
 }

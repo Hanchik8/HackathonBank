@@ -44,12 +44,12 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
   final TextEditingController _amountController = TextEditingController();
 
   static const List<String> _categories = <String>[
-    'Rent',
-    'Subscriptions',
-    'Utilities',
-    'Education',
-    'Insurance',
-    'Shopping',
+    'Аренда',
+    'Подписки',
+    'Коммунальные',
+    'Образование',
+    'Страхование',
+    'Покупки',
   ];
 
   int? _accountId;
@@ -122,14 +122,14 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
               ),
               const SizedBox(height: 18),
               Text(
-                'New scheduled payment',
+                'Новый отложенный платеж',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'Add a future debit and AI will include it in the forecast right away.',
+                'Добавьте будущее списание, и ИИ сразу учтет его в прогнозе.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppTheme.secondaryText,
                   height: 1.45,
@@ -140,13 +140,13 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 initialValue: _accountId,
                 isExpanded: true,
                 dropdownColor: AppTheme.surfaceSoft,
-                decoration: _inputDecoration('Debit account'),
+                decoration: _inputDecoration('Счет списания'),
                 items: widget.accounts
                     .map(
                       (account) => DropdownMenuItem<int>(
                         value: account.id,
                         child: Text(
-                          '${account.name} • ${SomFormatter.amount(account.balance)}',
+                          '${_displayAccountName(account.name)} \u2022 ${SomFormatter.amount(account.balance)}',
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -157,12 +157,12 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
               const SizedBox(height: 14),
               TextField(
                 controller: _titleController,
-                decoration: _inputDecoration('Payment title'),
+                decoration: _inputDecoration('Название платежа'),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: _counterpartyController,
-                decoration: _inputDecoration('Counterparty'),
+                decoration: _inputDecoration('Получатель'),
               ),
               const SizedBox(height: 14),
               TextField(
@@ -170,11 +170,11 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: _inputDecoration('Amount in KGS'),
+                decoration: _inputDecoration('Сумма в KGS'),
               ),
               const SizedBox(height: 14),
               Text(
-                'Category',
+                'Категория',
                 style: Theme.of(
                   context,
                 ).textTheme.labelLarge?.copyWith(color: AppTheme.secondaryText),
@@ -195,7 +195,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
               ),
               const SizedBox(height: 18),
               Text(
-                'When to debit',
+                'Когда списать',
                 style: Theme.of(
                   context,
                 ).textTheme.labelLarge?.copyWith(color: AppTheme.secondaryText),
@@ -205,7 +205,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 children: <Widget>[
                   Expanded(
                     child: _SelectableChip(
-                      label: '3 days',
+                      label: '3 дня',
                       selected: _daysOffset == 3,
                       onTap: () => setState(() => _daysOffset = 3),
                     ),
@@ -213,7 +213,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _SelectableChip(
-                      label: '7 days',
+                      label: '7 дней',
                       selected: _daysOffset == 7,
                       onTap: () => setState(() => _daysOffset = 7),
                     ),
@@ -221,7 +221,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _SelectableChip(
-                      label: '10 days',
+                      label: '10 дней',
                       selected: _daysOffset == 10,
                       onTap: () => setState(() => _daysOffset = 10),
                     ),
@@ -237,7 +237,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Text(
-                  'Debit date: ${AppDateFormatter.shortDate(DateTime.now().add(Duration(days: _daysOffset)))}',
+                  'Дата списания: ${AppDateFormatter.shortDate(DateTime.now().add(Duration(days: _daysOffset)))}',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -248,7 +248,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
-                  child: const Text('Schedule payment'),
+                  child: const Text('Запланировать платеж'),
                 ),
               ),
             ],
@@ -277,6 +277,14 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
         borderSide: const BorderSide(color: AppTheme.accent),
       ),
     );
+  }
+
+  String _displayAccountName(String name) {
+    return switch (name) {
+      'Main' => 'Основной счет',
+      'Savings' => 'Сбережения',
+      _ => name,
+    };
   }
 }
 

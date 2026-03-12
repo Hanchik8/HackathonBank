@@ -37,13 +37,13 @@ class UpcomingPaymentsCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Upcoming debits',
+                      'Будущие списания',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'AI uses this list to estimate cash gaps and payment postpones.',
+                      'ИИ использует этот список, чтобы оценивать кассовые разрывы и предлагать переносы.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                         height: 1.4,
@@ -63,7 +63,7 @@ class UpcomingPaymentsCard extends StatelessWidget {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('New'),
+                      : const Text('Новый'),
                 ),
               ),
             ],
@@ -78,7 +78,7 @@ class UpcomingPaymentsCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Text(
-                'No scheduled payments yet. Add one so AI includes it in the forecast.',
+                'Пока нет запланированных платежей. Добавьте один, чтобы ИИ учел его в прогнозе.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppTheme.secondaryText,
                   height: 1.45,

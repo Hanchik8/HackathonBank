@@ -49,7 +49,7 @@ class ApiClient {
 
   String _extractErrorMessage(http.Response response) {
     if (response.body.isEmpty) {
-      return 'Request failed.';
+      return 'Запрос завершился ошибкой.';
     }
 
     final body = utf8.decode(response.bodyBytes);
@@ -75,5 +75,5 @@ class ApiException implements Exception {
   final String message;
 
   @override
-  String toString() => 'ApiException($statusCode): $message';
+  String toString() => 'Ошибка API ($statusCode): $message';
 }

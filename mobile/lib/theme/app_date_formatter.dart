@@ -2,18 +2,18 @@ class AppDateFormatter {
   AppDateFormatter._();
 
   static const List<String> _shortMonths = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'янв.',
+    'февр.',
+    'мар.',
+    'апр.',
+    'мая',
+    'июн.',
+    'июл.',
+    'авг.',
+    'сент.',
+    'окт.',
+    'нояб.',
+    'дек.',
   ];
 
   static String shortDate(DateTime value) {

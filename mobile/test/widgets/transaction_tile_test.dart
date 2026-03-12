@@ -19,7 +19,7 @@ void main() {
     );
 
     expect(find.text('Продукты'), findsOneWidget);
-    expect(find.textContaining('Main account'), findsOneWidget);
-    expect(find.textContaining('12 Mar, 09:05'), findsOneWidget);
+    expect(find.textContaining('Основной счет'), findsOneWidget);
+    expect(find.textContaining('12 мар., 09:05'), findsOneWidget);
   });
 }

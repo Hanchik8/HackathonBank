@@ -185,7 +185,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
       widget.onDataChanged();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment "${created.title}" scheduled.')),
+        SnackBar(content: Text('Платеж "${created.title}" запланирован.')),
       );
       await _loadData();
     } on ApiException catch (error) {
@@ -236,8 +236,8 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final summary = _buildSummary(transactions, _offsetDays);
     final scheduledPayments = dashboard.scheduledPayments;
     final summaryTitle = dashboard.points.isEmpty
-        ? 'Last 30 days'
-        : 'Window until ${dashboard.points.last.label}';
+        ? 'Последние 30 дней'
+        : 'Окно до ${dashboard.points.last.label}';
     final nearestPayment = scheduledPayments.isEmpty
         ? null
         : scheduledPayments.first;
@@ -254,13 +254,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Financial analysis',
+                      'Финансовый анализ',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'AI watches every upcoming debit and suggests action before the balance drops below zero.',
+                      'ИИ отслеживает будущие списания и заранее предлагает действие, прежде чем баланс уйдет в минус.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                         height: 1.4,
@@ -283,23 +283,23 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             runSpacing: 12,
             children: <Widget>[
               AnalysisInsightCard(
-                title: 'Savings cushion',
+                title: 'Подушка',
                 value: SomFormatter.amount(dashboard.savingsBalance),
-                subtitle: 'Savings account',
+                subtitle: 'Счет сбережений',
                 accentColor: AppTheme.accent,
               ),
               AnalysisInsightCard(
-                title: 'Debits ahead',
+                title: 'Будущие списания',
                 value: '${scheduledPayments.length}',
                 subtitle: nearestPayment == null
-                    ? 'No critical debits'
-                    : 'Closest: ${AppDateFormatter.shortDate(nearestPayment.dueDate)}',
+                    ? 'Критичных списаний нет'
+                    : 'Ближайшее: ${AppDateFormatter.shortDate(nearestPayment.dueDate)}',
                 accentColor: AppTheme.blue,
               ),
               AnalysisInsightCard(
-                title: 'Window minimum',
+                title: 'Минимум в окне',
                 value: SomFormatter.amount(dashboard.minimumProjectedBalance),
-                subtitle: 'Horizon ${dashboard.horizonDays} d',
+                subtitle: 'Горизонт ${dashboard.horizonDays} дн.',
                 accentColor: dashboard.minimumProjectedBalance < 0
                     ? AppTheme.coral
                     : AppTheme.accent,
@@ -335,7 +335,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'Balance forecast',
+                            'Прогноз баланса',
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
@@ -356,7 +356,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                       ),
                     ),
                     MiniBadge(
-                      label: '${scheduledPayments.length} payments',
+                      label: '${scheduledPayments.length} платежей',
                       color: AppTheme.accent,
                     ),
                   ],
@@ -368,7 +368,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Time machine',
+                  'Машина времени',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -378,7 +378,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                   max: 10,
                   divisions: 10,
                   value: _offsetDays.toDouble(),
-                  label: '$_offsetDays d',
+                  label: '$_offsetDays дн.',
                   onChanged: (value) =>
                       setState(() => _offsetDays = value.round()),
                   onChangeEnd: (_) => _loadData(),
@@ -387,13 +387,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
                     Text(
-                      '0 days',
+                      '0 дн.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                       ),
                     ),
                     Text(
-                      '10 days',
+                      '10 дн.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                       ),
@@ -498,7 +498,7 @@ class _MonthAnalysisCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _MetricRow(
-            label: 'Income',
+            label: 'Поступления',
             amount: summary.income,
             color: AppTheme.accent,
           ),
@@ -511,7 +511,7 @@ class _MonthAnalysisCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _MetricRow(
-            label: 'Expenses',
+            label: 'Расходы',
             amount: summary.expenses,
             color: Colors.white,
           ),
@@ -584,32 +584,32 @@ class _BreakdownCard extends StatelessWidget {
         children: <Widget>[
           AnalysisCategoryRow(
             color: AppTheme.accent,
-            title: 'Income',
+            title: 'Поступления',
             amount: summary.income,
             highlight: true,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.blue,
-            title: 'QR payments',
+            title: 'Оплата по QR',
             amount: summary.qr,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.accent,
-            title: 'Transfers',
+            title: 'Переводы',
             amount: summary.transfers,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.yellow,
-            title: 'Shopping',
+            title: 'Покупки',
             amount: summary.shopping,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.coral,
-            title: 'Restaurants',
+            title: 'Рестораны',
             amount: summary.restaurants,
           ),
         ],

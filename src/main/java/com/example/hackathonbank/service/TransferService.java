@@ -49,7 +49,9 @@ public class TransferService {
             throw new IllegalArgumentException("Для перевода нужны два разных счета.");
         }
 
-        String description = StringUtils.hasText(request.description()) ? request.description() : "Внутренний перевод";
+        String description = StringUtils.hasText(request.description())
+                ? request.description()
+                : "Внутренний перевод";
         executeTransfer(fromAccount, toAccount, request.amount(), description);
 
         return new TransferResponse(
