@@ -32,9 +32,13 @@ class BankApiService {
     return AiDashboardModel.fromJson(json);
   }
 
-  Future<AiAnalysisModel> analyzeCashFlow() async {
+  Future<AiAnalysisModel> analyzeCashFlow(int offsetDays) async {
     final json =
-        await _apiClient.postJson('/ai/analyze') as Map<String, dynamic>;
+        await _apiClient.postJson(
+              '/ai/analyze',
+              body: <String, dynamic>{'offsetDays': offsetDays},
+            )
+            as Map<String, dynamic>;
     return AiAnalysisModel.fromJson(json);
   }
 
@@ -46,6 +50,30 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return AiExecutionModel.fromJson(json);
+  }
+
+  Future<ScheduledPaymentModel> createScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/scheduled-payments',
+              body: <String, dynamic>{
+                'accountId': accountId,
+                'title': title,
+                'counterparty': counterparty,
+                'category': category,
+                'amount': amount,
+                'dueDate': dueDate.toIso8601String().split('T').first,
+              },
+            )
+            as Map<String, dynamic>;
+    return ScheduledPaymentModel.fromJson(json);
   }
 
   Future<TransferResultModel> transferBetweenAccounts({

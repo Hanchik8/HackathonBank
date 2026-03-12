@@ -5,7 +5,7 @@ import 'package:hackathon_bank_mobile/main.dart';
 import 'test_support/fake_bank_api_service.dart';
 
 void main() {
-  testWidgets('application shell renders navigation labels', (
+  testWidgets('application shell renders navigation and switches tabs', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(430, 932));
@@ -13,19 +13,17 @@ void main() {
     await tester.pumpWidget(HackathonBankApp(apiService: FakeBankApiService()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Главная'), findsOneWidget);
-    expect(find.text('Анализ'), findsOneWidget);
-    expect(find.text('Платежи'), findsOneWidget);
-    expect(find.text('Еще'), findsOneWidget);
+    expect(find.byIcon(Icons.home_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.bar_chart_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.swap_horiz_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
 
-    await tester.tap(find.text('Анализ'));
+    await tester.tap(find.byIcon(Icons.bar_chart_rounded));
     await tester.pumpAndSettle();
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
-    expect(find.text('Финансовый анализ'), findsOneWidget);
-
-    await tester.tap(find.text('Платежи'));
+    await tester.tap(find.byIcon(Icons.swap_horiz_rounded));
     await tester.pumpAndSettle();
-
-    expect(find.text('Платежи'), findsWidgets);
+    expect(find.byType(TextField), findsAtLeastNWidgets(2));
   });
 }

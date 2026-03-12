@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/ai")
 public class AiController {
@@ -32,8 +34,9 @@ public class AiController {
     }
 
     @PostMapping("/analyze")
-    public AiAnalyzeResponse analyze() {
-        return aiAnalysisService.analyze();
+    public AiAnalyzeResponse analyze(@RequestBody(required = false) Map<String, Integer> request) {
+        Map<String, Integer> payload = request == null ? Map.of() : request;
+        return aiAnalysisService.analyze(payload.getOrDefault("offsetDays", 10));
     }
 
     @PostMapping("/execute")

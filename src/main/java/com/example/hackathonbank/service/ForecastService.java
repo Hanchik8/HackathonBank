@@ -50,7 +50,12 @@ public class ForecastService {
         List<ScheduledPaymentSnapshot> paymentSnapshots = pendingPayments.stream()
                 .map(payment -> new ScheduledPaymentSnapshot(
                         payment.getId(),
+                        payment.getAccount().getId(),
+                        payment.getAccount().getName(),
                         payment.getTitle(),
+                        payment.getCounterparty(),
+                        payment.getCategory(),
+                        payment.getIconKey(),
                         payment.getAmount(),
                         payment.getDueDate(),
                         payment.getStatus().name()
