@@ -77,8 +77,11 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_rounded));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).at(0), 'Insurance');
-    await tester.enterText(find.byType(TextField).at(1), 'Insurance Co');
+    await tester.enterText(find.byType(TextField).at(0), 'Страхование');
+    await tester.enterText(
+      find.byType(TextField).at(1),
+      'Страховая компания',
+    );
     await tester.enterText(find.byType(TextField).at(2), '4200');
 
     await tester.scrollUntilVisible(
@@ -90,7 +93,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(apiService.createScheduledPaymentCalls, 1);
-    expect(apiService.lastScheduledPaymentDraft?['title'], 'Insurance');
+    expect(apiService.lastScheduledPaymentDraft?['title'], 'Страхование');
     expect(apiService.dashboardRequests.length, greaterThan(1));
     expect(refreshCount, 1);
   });

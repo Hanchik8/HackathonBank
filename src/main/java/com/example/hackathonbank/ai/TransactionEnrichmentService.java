@@ -126,7 +126,8 @@ public class TransactionEnrichmentService {
         GroupAccumulator dynamic = new GroupAccumulator(List.of("развлечения", "импульсные покупки"));
 
         for (Transaction transaction : transactions) {
-            if (transaction.getStatus() != TransactionStatus.COMPLETED || transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
+            if (transaction.getStatus() != TransactionStatus.COMPLETED
+                    || transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
                 continue;
             }
             String normalized = (transaction.getTitle() + " " + transaction.getCategory()).toLowerCase(Locale.ROOT);

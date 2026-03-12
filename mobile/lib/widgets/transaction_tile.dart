@@ -15,7 +15,7 @@ class TransactionTile extends StatelessWidget {
     final amountColor = transaction.isIncome ? AppTheme.accent : Colors.white;
     final amountPrefix = transaction.isIncome ? '+' : '-';
     final subtitle =
-        '${transaction.category} • $_accountLabel • ${AppDateFormatter.shortDateTime(transaction.occurredAt)}';
+        '${transaction.category} \u2022 $_accountLabel \u2022 ${AppDateFormatter.shortDateTime(transaction.occurredAt)}';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -65,7 +65,7 @@ class TransactionTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      transaction.status,
+                      _statusLabel,
                       style: const TextStyle(
                         color: AppTheme.accent,
                         fontWeight: FontWeight.w700,
@@ -91,9 +91,19 @@ class TransactionTile extends StatelessWidget {
 
   String get _accountLabel {
     return switch (transaction.accountName) {
-      'Main' => 'Main account',
-      'Savings' => 'Savings',
+      'Main' => 'Основной счет',
+      'Savings' => 'Сбережения',
       _ => transaction.accountName,
+    };
+  }
+
+  String get _statusLabel {
+    return switch (transaction.status) {
+      'SCHEDULED' => 'Запланирован',
+      'PENDING' => 'В обработке',
+      'FAILED' => 'Ошибка',
+      'CANCELLED' => 'Отменен',
+      _ => transaction.status,
     };
   }
 

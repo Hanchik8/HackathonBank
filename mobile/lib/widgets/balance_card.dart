@@ -72,7 +72,7 @@ class BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Azizkhan • ${mainAccount.currency}',
+            'Azizkhan \u2022 ${mainAccount.currency}',
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(color: AppTheme.secondaryText),

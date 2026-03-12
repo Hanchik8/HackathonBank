@@ -31,7 +31,7 @@ class AiAlertCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'AI action',
+            'Действие ИИ',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: Colors.black,
               fontWeight: FontWeight.w800,
@@ -61,7 +61,7 @@ class AiAlertCard extends StatelessWidget {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Execute'),
+                  : const Text('Выполнить'),
             ),
           ),
         ],

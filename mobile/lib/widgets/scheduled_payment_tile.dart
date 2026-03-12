@@ -56,7 +56,7 @@ class ScheduledPaymentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${payment.counterparty} • ${payment.accountName}',
+                  '${payment.counterparty} \u2022 ${_displayAccountName(payment.accountName)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.secondaryText,
                     fontWeight: FontWeight.w600,
@@ -67,7 +67,7 @@ class ScheduledPaymentTile extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        '${payment.category} • $dueLabel',
+                        '${payment.category} \u2022 $dueLabel',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -96,9 +96,9 @@ class ScheduledPaymentTile extends StatelessWidget {
     final todayOnly = DateTime(now.year, now.month, now.day);
     final days = dueDateOnly.difference(todayOnly).inDays;
     if (days <= 0) {
-      return 'today';
+      return 'сегодня';
     }
-    return 'in $days d • ${AppDateFormatter.shortDate(dueDate)}';
+    return 'через $days дн. \u2022 ${AppDateFormatter.shortDate(dueDate)}';
   }
 
   IconData _iconFor(String iconKey) {
@@ -124,6 +124,14 @@ class ScheduledPaymentTile extends StatelessWidget {
       _ => Colors.white70,
     };
   }
+
+  String _displayAccountName(String name) {
+    return switch (name) {
+      'Main' => 'Основной счет',
+      'Savings' => 'Сбережения',
+      _ => name,
+    };
+  }
 }
 
 class _StatusChip extends StatelessWidget {
@@ -139,9 +147,9 @@ class _StatusChip extends StatelessWidget {
       _ => AppTheme.yellow,
     };
     final label = switch (status) {
-      'POSTPONED' => 'Postponed',
-      'PAID' => 'Paid',
-      _ => 'Planned',
+      'POSTPONED' => 'Перенесен',
+      'PAID' => 'Оплачен',
+      _ => 'Запланирован',
     };
 
     return Container(

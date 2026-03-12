@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: <Widget>[
               Expanded(
                 child: _MonthSummaryCard(
-                  title: 'За Март',
+                  title: 'За март',
                   value: SomFormatter.amount(monthlyExpense, fractionDigits: 0),
                   segments: <SpendSegment>[
                     SpendSegment(color: AppTheme.blue, value: qrExpense),
@@ -153,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 18),
           const SizedBox(height: 156, child: _HeroBannerRow()),
           const SizedBox(height: 18),
-          BankCardPreview(account: mainAccount, cardLabel: '••0484'),
+          BankCardPreview(account: mainAccount, cardLabel: '\u2022\u20220484'),
           const SizedBox(height: 18),
           const _ShortcutStrip(),
           const SizedBox(height: 28),
@@ -286,9 +286,12 @@ class _TopTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
         const _TabLabel(label: 'MMarket', active: false),
         const SizedBox(width: 18),
         Container(
@@ -298,7 +301,7 @@ class _TopTabs extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: const Text(
-            'NEW',
+            'НОВОЕ',
             style: TextStyle(
               color: Colors.white,
               fontSize: 12,
@@ -307,8 +310,10 @@ class _TopTabs extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 26),
-        const _TabLabel(label: 'MBank', active: true),
-      ],
+            const _TabLabel(label: 'MBank', active: true),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -516,7 +521,7 @@ class _HeroBannerRow extends StatelessWidget {
       children: const <Widget>[
         _PromoBanner(
           width: 280,
-          title: 'Скидки\ndo 50%\nв MMarket!',
+          title: 'Скидки\nдо 50%\nв MMarket!',
           colors: <Color>[Color(0xFF22A6A4), Color(0xFFD9FBD4)],
           accent: Color(0xFFEE6CB2),
         ),
