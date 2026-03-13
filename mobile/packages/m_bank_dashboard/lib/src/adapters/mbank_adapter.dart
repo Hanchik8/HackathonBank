@@ -35,33 +35,60 @@ class MbankAdapter implements DashboardRepository {
   }
 
   @override
-  Future<List<AccountModel>> fetchAccounts() {
-    // TODO: Map the existing MBank account DTOs to AccountModel.
-    throw UnimplementedError('Map MBank accounts to AccountModel.');
+  Future<List<AccountModel>> fetchAccounts() async {
+    final accounts = await _client.getAccounts();
+    return accounts.map(_mapAccount).toList();
   }
 
   @override
-  Future<List<TransactionModel>> fetchTransactions() {
-    // TODO: Map the existing MBank transaction DTOs to TransactionModel.
-    throw UnimplementedError('Map MBank transactions to TransactionModel.');
+  Future<List<TransactionModel>> fetchTransactions() async {
+    final transactions = await _client.getTransactions();
+    return transactions.map(_mapTransaction).toList();
   }
 
   @override
-  Future<AiDashboardModel> fetchDashboard(int offsetDays) {
-    // TODO: Compose dashboard data from MBank balances, future payments, and forecast services.
-    throw UnimplementedError('Compose MBank dashboard data.');
+  Future<AiDashboardModel> fetchDashboard(int offsetDays) async {
+    final dashboard = await _client.getDashboardData(offsetDays);
+    final forecastPoints = dashboard.points.map(_mapForecastPoint).toList();
+    final scheduledPayments = dashboard.scheduledPayments
+        .map(_mapScheduledPayment)
+        .toList();
+
+    return AiDashboardModel(
+      currentBalance: dashboard.currentBalance,
+      savingsBalance: dashboard.savingsBalance,
+      minimumProjectedBalance:
+          dashboard.minimumProjectedBalance ??
+          (forecastPoints.isEmpty
+              ? dashboard.currentBalance
+              : forecastPoints
+                  .map((point) => point.balance)
+                  .reduce((left, right) => left < right ? left : right)),
+      horizonDays: dashboard.horizonDays ?? offsetDays,
+      points: forecastPoints,
+      scheduledPayments: scheduledPayments,
+    );
   }
 
   @override
-  Future<AiAnalysisModel> analyzeCashFlow(int offsetDays) {
-    // TODO: Connect MBank AI analysis or orchestration layer.
-    throw UnimplementedError('Connect MBank AI analysis.');
+  Future<AiAnalysisModel> analyzeCashFlow(int offsetDays) async {
+    final analysis = await _client.analyzeCashFlow(offsetDays);
+    return AiAnalysisModel(
+      hasAlert: analysis.hasAlert,
+      message: analysis.message,
+      actionToken: analysis.actionToken,
+    );
   }
 
   @override
-  Future<AiExecutionModel> executeAction(String actionToken) {
-    // TODO: Route AI actions to the MBank automation layer.
-    throw UnimplementedError('Connect MBank AI action execution.');
+  Future<AiExecutionModel> executeAction(String actionToken) async {
+    final execution = await _client.executeAction(actionToken);
+    return AiExecutionModel(
+      success: execution.success,
+      message: execution.message,
+      currentBalance: execution.currentBalance,
+      savingsBalance: execution.savingsBalance,
+    );
   }
 
   @override
@@ -72,9 +99,104 @@ class MbankAdapter implements DashboardRepository {
     required String category,
     required double amount,
     required DateTime dueDate,
-  }) {
-    // TODO: Map deferred payment creation to the MBank payments API.
-    throw UnimplementedError('Connect MBank deferred payment creation.');
+  }) async {
+    final created = await _client.createScheduledPayment(
+      accountId: accountId,
+      title: title,
+      counterparty: counterparty,
+      category: category,
+      amount: amount,
+      dueDate: dueDate,
+    );
+    return _mapScheduledPayment(created);
+  }
+
+  AccountModel _mapAccount(ExistingMbankAccount account) {
+    return AccountModel(
+      id: account.id,
+      // TODO: Confirm the preferred MBank account display name field.
+      name: account.name.isEmpty ? 'Account ${account.id}' : account.name,
+      // TODO: Align MBank account type vocabulary with the package enum-like strings.
+      type: account.type.isEmpty ? 'MAIN' : account.type,
+      balance: account.balance,
+      currency: account.currencyCode.isEmpty ? 'KGS' : account.currencyCode,
+    );
+  }
+
+  TransactionModel _mapTransaction(ExistingMbankTransaction transaction) {
+    final occurredAt =
+        transaction.occurredAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+    return TransactionModel(
+      id: transaction.id,
+      // TODO: Confirm whether MBank should display merchant or payment title first.
+      title: transaction.title.isEmpty
+          ? (transaction.counterparty.isEmpty
+                ? 'Операция'
+                : transaction.counterparty)
+          : transaction.title,
+      counterparty: transaction.counterparty,
+      amount: transaction.amount,
+      category: transaction.category.isEmpty
+          ? 'Без категории'
+          : transaction.category,
+      iconKey: transaction.iconKey.isEmpty ? 'payment' : transaction.iconKey,
+      type: transaction.type.isEmpty ? 'PAYMENT' : transaction.type,
+      status: transaction.status.isEmpty ? 'COMPLETED' : transaction.status,
+      accountName: transaction.accountName.isEmpty
+          ? 'Основной счет'
+          : transaction.accountName,
+      occurredAt: occurredAt,
+    );
+  }
+
+  ForecastPointModel _mapForecastPoint(ExistingMbankForecastPoint point) {
+    final safeDate = point.date ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return ForecastPointModel(
+      dayOffset: point.dayOffset,
+      isoDate: safeDate.toIso8601String(),
+      label: point.label.isEmpty ? _formatPointLabel(safeDate) : point.label,
+      balance: point.balance,
+    );
+  }
+
+  ScheduledPaymentModel _mapScheduledPayment(
+    ExistingMbankScheduledPayment payment,
+  ) {
+    final dueDate = payment.dueDate ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return ScheduledPaymentModel(
+      id: payment.id,
+      accountId: payment.accountId,
+      accountName: payment.accountName.isEmpty
+          ? 'Основной счет'
+          : payment.accountName,
+      title: payment.title.isEmpty ? 'Платеж' : payment.title,
+      counterparty: payment.counterparty,
+      category: payment.category.isEmpty ? 'Без категории' : payment.category,
+      iconKey: payment.iconKey.isEmpty ? 'calendar' : payment.iconKey,
+      amount: payment.amount,
+      dueDate: dueDate,
+      status: payment.status.isEmpty ? 'SCHEDULED' : payment.status,
+    );
+  }
+
+  String _formatPointLabel(DateTime value) {
+    const monthLabels = <String>[
+      'янв.',
+      'фев.',
+      'мар.',
+      'апр.',
+      'мая',
+      'июн.',
+      'июл.',
+      'авг.',
+      'сен.',
+      'окт.',
+      'ноя.',
+      'дек.',
+    ];
+    final month = monthLabels[value.month.clamp(1, 12) - 1];
+    return '${value.day} $month';
   }
 }
 
@@ -82,6 +204,25 @@ abstract class ExistingMbankClient {
   Future<List<ExistingMbankSubscription>> fetchSubscriptions();
 
   Future<void> cancelSubscription(String subscriptionId);
+
+  Future<List<ExistingMbankAccount>> getAccounts();
+
+  Future<List<ExistingMbankTransaction>> getTransactions();
+
+  Future<ExistingMbankDashboardData> getDashboardData(int offsetDays);
+
+  Future<ExistingMbankAiAnalysis> analyzeCashFlow(int offsetDays);
+
+  Future<ExistingMbankActionExecution> executeAction(String actionToken);
+
+  Future<ExistingMbankScheduledPayment> createScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+  });
 }
 
 class ExistingMbankSubscription {
@@ -100,4 +241,277 @@ class ExistingMbankSubscription {
   final String currencyCode;
   final String status;
   final DateTime? nextChargeDate;
+
+  factory ExistingMbankSubscription.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankSubscription(
+      id: json['id']?.toString() ?? '',
+      displayName:
+          json['displayName'] as String? ??
+          (json['title'] as String? ?? ''),
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      currencyCode:
+          json['currencyCode'] as String? ??
+          (json['currency'] as String? ?? ''),
+      status: json['status'] as String? ?? 'UNKNOWN',
+      nextChargeDate: _dateFromJson(json['nextChargeDate']),
+    );
+  }
+}
+
+class ExistingMbankAccount {
+  const ExistingMbankAccount({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.balance,
+    required this.currencyCode,
+  });
+
+  final int id;
+  final String name;
+  final String type;
+  final double balance;
+  final String currencyCode;
+
+  factory ExistingMbankAccount.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankAccount(
+      id: _intFromJson(json['id']),
+      name: json['name'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+      currencyCode:
+          json['currencyCode'] as String? ??
+          (json['currency'] as String? ?? ''),
+    );
+  }
+}
+
+class ExistingMbankTransaction {
+  const ExistingMbankTransaction({
+    required this.id,
+    required this.title,
+    required this.counterparty,
+    required this.amount,
+    required this.category,
+    required this.iconKey,
+    required this.type,
+    required this.status,
+    required this.accountName,
+    required this.occurredAt,
+  });
+
+  final int id;
+  final String title;
+  final String counterparty;
+  final double amount;
+  final String category;
+  final String iconKey;
+  final String type;
+  final String status;
+  final String accountName;
+  final DateTime? occurredAt;
+
+  factory ExistingMbankTransaction.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankTransaction(
+      id: _intFromJson(json['id']),
+      title: json['title'] as String? ?? '',
+      counterparty:
+          json['counterparty'] as String? ??
+          (json['merchant'] as String? ?? ''),
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      category: json['category'] as String? ?? '',
+      iconKey: json['iconKey'] as String? ?? '',
+      type: json['type'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      accountName: json['accountName'] as String? ?? '',
+      occurredAt:
+          _dateFromJson(json['occurredAt']) ?? _dateFromJson(json['date']),
+    );
+  }
+}
+
+class ExistingMbankDashboardData {
+  const ExistingMbankDashboardData({
+    required this.currentBalance,
+    required this.savingsBalance,
+    required this.minimumProjectedBalance,
+    required this.horizonDays,
+    required this.points,
+    required this.scheduledPayments,
+  });
+
+  final double currentBalance;
+  final double savingsBalance;
+  final double? minimumProjectedBalance;
+  final int? horizonDays;
+  final List<ExistingMbankForecastPoint> points;
+  final List<ExistingMbankScheduledPayment> scheduledPayments;
+
+  factory ExistingMbankDashboardData.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankDashboardData(
+      currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+      savingsBalance: (json['savingsBalance'] as num?)?.toDouble() ?? 0.0,
+      minimumProjectedBalance:
+          (json['minimumProjectedBalance'] as num?)?.toDouble(),
+      horizonDays: _nullableIntFromJson(json['horizonDays']),
+      points: _listFromJson(
+        json['points'],
+        (item) => ExistingMbankForecastPoint.fromJson(item),
+      ),
+      scheduledPayments: _listFromJson(
+        json['scheduledPayments'],
+        (item) => ExistingMbankScheduledPayment.fromJson(item),
+      ),
+    );
+  }
+}
+
+class ExistingMbankForecastPoint {
+  const ExistingMbankForecastPoint({
+    required this.dayOffset,
+    required this.date,
+    required this.label,
+    required this.balance,
+  });
+
+  final int dayOffset;
+  final DateTime? date;
+  final String label;
+  final double balance;
+
+  factory ExistingMbankForecastPoint.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankForecastPoint(
+      dayOffset: _intFromJson(json['dayOffset']),
+      date: _dateFromJson(json['isoDate']) ?? _dateFromJson(json['date']),
+      label: json['label'] as String? ?? '',
+      balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ExistingMbankAiAnalysis {
+  const ExistingMbankAiAnalysis({
+    required this.hasAlert,
+    required this.message,
+    required this.actionToken,
+  });
+
+  final bool hasAlert;
+  final String message;
+  final String? actionToken;
+
+  factory ExistingMbankAiAnalysis.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankAiAnalysis(
+      hasAlert: json['hasAlert'] as bool? ?? false,
+      message: json['message'] as String? ?? '',
+      actionToken: json['actionToken'] as String?,
+    );
+  }
+}
+
+class ExistingMbankActionExecution {
+  const ExistingMbankActionExecution({
+    required this.success,
+    required this.message,
+    required this.currentBalance,
+    required this.savingsBalance,
+  });
+
+  final bool success;
+  final String message;
+  final double currentBalance;
+  final double savingsBalance;
+
+  factory ExistingMbankActionExecution.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankActionExecution(
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String? ?? '',
+      currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+      savingsBalance: (json['savingsBalance'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ExistingMbankScheduledPayment {
+  const ExistingMbankScheduledPayment({
+    required this.id,
+    required this.accountId,
+    required this.accountName,
+    required this.title,
+    required this.counterparty,
+    required this.category,
+    required this.iconKey,
+    required this.amount,
+    required this.dueDate,
+    required this.status,
+  });
+
+  final int id;
+  final int accountId;
+  final String accountName;
+  final String title;
+  final String counterparty;
+  final String category;
+  final String iconKey;
+  final double amount;
+  final DateTime? dueDate;
+  final String status;
+
+  factory ExistingMbankScheduledPayment.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankScheduledPayment(
+      id: _intFromJson(json['id']),
+      accountId: _intFromJson(json['accountId']),
+      accountName: json['accountName'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      counterparty: json['counterparty'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      iconKey: json['iconKey'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      dueDate: _dateFromJson(json['dueDate']),
+      status: json['status'] as String? ?? '',
+    );
+  }
+}
+
+DateTime? _dateFromJson(Object? rawValue) {
+  if (rawValue is DateTime) {
+    return rawValue;
+  }
+  if (rawValue is String) {
+    return DateTime.tryParse(rawValue);
+  }
+  return null;
+}
+
+int _intFromJson(Object? rawValue) {
+  if (rawValue is int) {
+    return rawValue;
+  }
+  if (rawValue is num) {
+    return rawValue.toInt();
+  }
+  if (rawValue is String) {
+    return int.tryParse(rawValue) ?? 0;
+  }
+  return 0;
+}
+
+int? _nullableIntFromJson(Object? rawValue) {
+  if (rawValue == null) {
+    return null;
+  }
+  return _intFromJson(rawValue);
+}
+
+List<T> _listFromJson<T>(
+  Object? rawValue,
+  T Function(Map<String, dynamic> json) builder,
+) {
+  if (rawValue is! List<dynamic>) {
+    return <T>[];
+  }
+  return rawValue
+      .whereType<Map<String, dynamic>>()
+      .map(builder)
+      .toList(growable: false);
 }
