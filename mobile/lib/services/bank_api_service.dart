@@ -1,3 +1,5 @@
+import 'package:m_bank_dashboard/m_bank_dashboard.dart' show SubscriptionModel;
+
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
@@ -23,6 +25,33 @@ class BankApiService {
     return json
         .map((item) => TransactionModel.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<SubscriptionModel>> fetchSubscriptions() async {
+    try {
+      final json = await _apiClient.getJson('/subscriptions');
+      if (json is! List<dynamic>) {
+        return const <SubscriptionModel>[];
+      }
+      return json
+          .map(
+            (item) => SubscriptionModel.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+    } on ApiException catch (error) {
+      // NOTE: endpoint may be absent in backend.
+      if (error.statusCode == 404 || error.statusCode == 405) {
+        return const <SubscriptionModel>[];
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> cancelSubscription(String subscriptionId) async {
+    await _apiClient.postJson(
+      '/subscriptions/$subscriptionId/cancel',
+      body: <String, dynamic>{},
+    );
   }
 
   Future<AiDashboardModel> fetchDashboard(int offsetDays) async {

@@ -47,16 +47,10 @@ class BankApiDashboardRepository implements DashboardRepository {
   }
 
   @override
-  Future<List<SubscriptionModel>> fetchSubscriptions() {
-    throw UnsupportedError(
-      'Subscription mapping is not available in BankApiDashboardRepository.',
-    );
-  }
+  Future<List<SubscriptionModel>> fetchSubscriptions() =>
+      _apiService.fetchSubscriptions();
 
   @override
-  Future<void> cancelSubscription(String subscriptionId) {
-    throw UnsupportedError(
-      'Subscription cancellation is not available in BankApiDashboardRepository.',
-    );
-  }
+  Future<void> cancelSubscription(String subscriptionId) =>
+      _apiService.cancelSubscription(subscriptionId);
 }
