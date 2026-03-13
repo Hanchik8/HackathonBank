@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:m_bank_dashboard/m_bank_dashboard.dart' show SubscriptionModel;
 
 import '../models/account_model.dart';
@@ -6,6 +7,7 @@ import '../models/ai_dashboard_model.dart';
 import '../models/transaction_model.dart';
 import '../models/transfer_result_model.dart';
 import 'api_client.dart';
+import 'mock_data_provider.dart';
 
 class BankApiService {
   BankApiService({ApiClient? apiClient})
@@ -14,17 +16,23 @@ class BankApiService {
   final ApiClient _apiClient;
 
   Future<List<AccountModel>> fetchAccounts() async {
-    final json = await _apiClient.getJson('/accounts') as List<dynamic>;
-    return json
-        .map((item) => AccountModel.fromJson(item as Map<String, dynamic>))
-        .toList();
+    final accounts = await _fetchAccountsFromApi();
+    if (kDebugMode) {
+      return MockDataProvider.applyLoanOverlayToAccounts(accounts);
+    }
+    return accounts;
   }
 
   Future<List<TransactionModel>> fetchTransactions() async {
-    final json = await _apiClient.getJson('/transactions') as List<dynamic>;
-    return json
-        .map((item) => TransactionModel.fromJson(item as Map<String, dynamic>))
-        .toList();
+    final transactions = await _fetchTransactionsFromApi();
+    if (kDebugMode) {
+      final accounts = await _fetchAccountsFromApi();
+      return MockDataProvider.applyLoanOverlayToTransactions(
+        transactions,
+        accounts,
+      );
+    }
+    return transactions;
   }
 
   Future<List<SubscriptionModel>> fetchSubscriptions() async {
@@ -55,6 +63,29 @@ class BankApiService {
   }
 
   Future<AiDashboardModel> fetchDashboard(int offsetDays) async {
+    if (kDebugMode) {
+      final accounts = await _fetchAccountsFromApi();
+      final transactions = await _fetchTransactionsFromApi();
+      try {
+        final json =
+            await _apiClient.getJson('/ai/dashboard?offsetDays=$offsetDays')
+                as Map<String, dynamic>;
+        final baseDashboard = AiDashboardModel.fromJson(json);
+        return MockDataProvider.computeDashboard(
+          accounts: accounts,
+          transactions: transactions,
+          offsetDays: offsetDays,
+          baseDashboard: baseDashboard,
+        );
+      } on ApiException catch (_) {
+        return MockDataProvider.computeDashboard(
+          accounts: accounts,
+          transactions: transactions,
+          offsetDays: offsetDays,
+        );
+      }
+    }
+
     final json =
         await _apiClient.getJson('/ai/dashboard?offsetDays=$offsetDays')
             as Map<String, dynamic>;
@@ -103,6 +134,49 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return ScheduledPaymentModel.fromJson(json);
+  }
+
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
+    required double amount,
+    required DateTime dueDate,
+  }) async {
+    if (kDebugMode) {
+      final accounts = await _fetchAccountsFromApi();
+      await MockDataProvider.createLoan(
+        accountId: accountId,
+        title: title,
+        amount: amount,
+        dueDate: dueDate,
+        accounts: accounts,
+      );
+      return;
+    }
+
+    await _apiClient.postJson(
+      '/loans',
+      body: <String, dynamic>{
+        'accountId': accountId,
+        'title': title,
+        'amount': amount,
+        'dueDate': dueDate.toIso8601String().split('T').first,
+      },
+    );
+  }
+
+  Future<List<AccountModel>> _fetchAccountsFromApi() async {
+    final json = await _apiClient.getJson('/accounts') as List<dynamic>;
+    return json
+        .map((item) => AccountModel.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<TransactionModel>> _fetchTransactionsFromApi() async {
+    final json = await _apiClient.getJson('/transactions') as List<dynamic>;
+    return json
+        .map((item) => TransactionModel.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<TransferResultModel> transferBetweenAccounts({

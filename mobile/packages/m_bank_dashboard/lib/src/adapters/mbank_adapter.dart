@@ -111,6 +111,22 @@ class MbankAdapter implements DashboardRepository {
     return _mapScheduledPayment(created);
   }
 
+  @override
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
+    required double amount,
+    required DateTime dueDate,
+  }) {
+    // TODO: Confirm the real MBank credit creation endpoint and payload.
+    return _client.createLoan(
+      accountId: accountId,
+      title: title,
+      amount: amount,
+      dueDate: dueDate,
+    );
+  }
+
   AccountModel _mapAccount(ExistingMbankAccount account) {
     return AccountModel(
       id: account.id,
@@ -220,6 +236,13 @@ abstract class ExistingMbankClient {
     required String title,
     required String counterparty,
     required String category,
+    required double amount,
+    required DateTime dueDate,
+  });
+
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
     required double amount,
     required DateTime dueDate,
   });

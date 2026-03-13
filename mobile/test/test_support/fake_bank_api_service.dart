@@ -213,6 +213,7 @@ class FakeBankApiService extends BankApiService {
   final TransferResultModel _transferResult;
   final TransferResultModel _internalTransferResult;
   final List<ScheduledPaymentModel> _scheduledPayments;
+  double _loanBalanceDelta = 0;
 
   final List<int> dashboardRequests = <int>[];
   final List<int> analyzeRequests = <int>[];
@@ -224,6 +225,8 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastExternalTransfer;
   int createScheduledPaymentCalls = 0;
   Map<String, Object?>? lastScheduledPaymentDraft;
+  int createLoanCalls = 0;
+  Map<String, Object?>? lastLoanDraft;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -236,7 +239,22 @@ class FakeBankApiService extends BankApiService {
     dashboardRequests.add(offsetDays);
     final sortedPayments = List<ScheduledPaymentModel>.from(_scheduledPayments)
       ..sort((left, right) => left.dueDate.compareTo(right.dueDate));
-    return _dashboardTemplate.copyWith(scheduledPayments: sortedPayments);
+    return _dashboardTemplate.copyWith(
+      currentBalance: _dashboardTemplate.currentBalance + _loanBalanceDelta,
+      minimumProjectedBalance:
+          _dashboardTemplate.minimumProjectedBalance + _loanBalanceDelta,
+      points: _dashboardTemplate.points
+          .map(
+            (point) => ForecastPointModel(
+              dayOffset: point.dayOffset,
+              isoDate: point.isoDate,
+              label: point.label,
+              balance: point.balance + _loanBalanceDelta,
+            ),
+          )
+          .toList(),
+      scheduledPayments: sortedPayments,
+    );
   }
 
   @override
@@ -288,6 +306,41 @@ class FakeBankApiService extends BankApiService {
       (left, right) => left.dueDate.compareTo(right.dueDate),
     );
     return payment;
+  }
+
+  @override
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
+    required double amount,
+    required DateTime dueDate,
+  }) async {
+    createLoanCalls += 1;
+    lastLoanDraft = <String, Object?>{
+      'accountId': accountId,
+      'title': title,
+      'amount': amount,
+      'dueDate': dueDate,
+    };
+    _loanBalanceDelta += amount;
+    final account = _accounts.firstWhere((item) => item.id == accountId);
+    _scheduledPayments.add(
+      ScheduledPaymentModel(
+        id: 200 + createLoanCalls,
+        accountId: accountId,
+        accountName: account.name,
+        title: '$title · Погашение',
+        counterparty: 'MBank',
+        category: 'Кредит',
+        iconKey: 'loan',
+        amount: amount * 1.12,
+        dueDate: dueDate,
+        status: 'SCHEDULED',
+      ),
+    );
+    _scheduledPayments.sort(
+      (left, right) => left.dueDate.compareTo(right.dueDate),
+    );
   }
 
   @override

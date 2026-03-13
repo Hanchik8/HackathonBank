@@ -100,4 +100,48 @@ void main() {
     expect(apiService.dashboardRequests.length, greaterThan(1));
     expect(refreshCount, 1);
   });
+
+  testWidgets('dashboard creates loan and refreshes data immediately', (
+    WidgetTester tester,
+  ) async {
+    final apiService = FakeBankApiService();
+    final repository = BankApiDashboardRepository(apiService: apiService);
+    var refreshCount = 0;
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: AiDashboardScreen(
+            repository: repository,
+            refreshSignal: 0,
+            onDataChanged: () => refreshCount += 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.account_balance_wallet_rounded));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bridge loan');
+    await tester.enterText(find.byType(TextField).at(1), '12500');
+
+    final createLoanButton = find.byType(ElevatedButton).last;
+    await tester.scrollUntilVisible(
+      createLoanButton,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(createLoanButton);
+    await tester.pumpAndSettle();
+
+    expect(apiService.createLoanCalls, 1);
+    expect(apiService.lastLoanDraft?['title'], 'Bridge loan');
+    expect(apiService.dashboardRequests.length, greaterThan(1));
+    expect(refreshCount, 1);
+  });
 }

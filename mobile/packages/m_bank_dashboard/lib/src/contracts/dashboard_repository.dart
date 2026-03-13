@@ -25,6 +25,13 @@ abstract class DashboardRepository {
     required DateTime dueDate,
   });
 
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
+    required double amount,
+    required DateTime dueDate,
+  });
+
   Future<List<SubscriptionModel>> fetchSubscriptions();
 
   Future<void> cancelSubscription(String subscriptionId);

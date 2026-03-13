@@ -47,6 +47,19 @@ class BankApiDashboardRepository implements DashboardRepository {
   }
 
   @override
+  Future<void> createLoan({
+    required int accountId,
+    required String title,
+    required double amount,
+    required DateTime dueDate,
+  }) => _apiService.createLoan(
+    accountId: accountId,
+    title: title,
+    amount: amount,
+    dueDate: dueDate,
+  );
+
+  @override
   Future<List<SubscriptionModel>> fetchSubscriptions() =>
       _apiService.fetchSubscriptions();
 
