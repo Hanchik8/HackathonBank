@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/bank_api_dashboard_repository.dart';
 import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
 import 'ai_dashboard_screen.dart';
@@ -18,6 +19,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late final BankApiService _apiService;
+  late final BankApiDashboardRepository _dashboardRepository;
 
   int _currentIndex = 0;
   int _refreshSignal = 0;
@@ -27,6 +29,7 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? BankApiService();
+    _dashboardRepository = BankApiDashboardRepository(apiService: _apiService);
   }
 
   void _handleDataChanged() {
@@ -50,7 +53,7 @@ class _AppShellState extends State<AppShell> {
     final screens = <Widget>[
       HomeScreen(apiService: _apiService, refreshSignal: _refreshSignal),
       AiDashboardScreen(
-        apiService: _apiService,
+        repository: _dashboardRepository,
         refreshSignal: _refreshSignal,
         onDataChanged: _handleDataChanged,
       ),
