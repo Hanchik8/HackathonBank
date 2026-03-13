@@ -38,6 +38,8 @@ dependencies:
   fl_chart: ^1.1.1
   google_fonts: ^8.0.2
   intl: ^0.20.2
+  m_bank_dashboard:
+    path: packages/m_bank_dashboard
 
 dev_dependencies:
   flutter_test:

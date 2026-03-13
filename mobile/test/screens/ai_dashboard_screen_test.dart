@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/screens/ai_dashboard_screen.dart';
+import 'package:hackathon_bank_mobile/services/bank_api_dashboard_repository.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
 
 import '../test_support/fake_bank_api_service.dart';
@@ -10,6 +11,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final apiService = FakeBankApiService();
+    final repository = BankApiDashboardRepository(apiService: apiService);
     var refreshCount = 0;
 
     await tester.binding.setSurfaceSize(const Size(430, 932));
@@ -19,7 +21,7 @@ void main() {
         theme: AppTheme.darkTheme,
         home: Scaffold(
           body: AiDashboardScreen(
-            apiService: apiService,
+            repository: repository,
             refreshSignal: 0,
             onDataChanged: () => refreshCount += 1,
           ),
@@ -56,6 +58,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final apiService = FakeBankApiService();
+    final repository = BankApiDashboardRepository(apiService: apiService);
     var refreshCount = 0;
 
     await tester.binding.setSurfaceSize(const Size(430, 932));
@@ -65,7 +68,7 @@ void main() {
         theme: AppTheme.darkTheme,
         home: Scaffold(
           body: AiDashboardScreen(
-            apiService: apiService,
+            repository: repository,
             refreshSignal: 0,
             onDataChanged: () => refreshCount += 1,
           ),
