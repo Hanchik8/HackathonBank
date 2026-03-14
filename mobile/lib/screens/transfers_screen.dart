@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/account_model.dart';
+import '../models/smart_category_model.dart';
 import '../services/api_client.dart';
 import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
@@ -32,17 +34,20 @@ class _TransfersScreenState extends State<TransfersScreen> {
   final TextEditingController _noteController = TextEditingController();
 
   List<AccountModel>? _accounts;
+  List<SmartCategory> _smartCategories = const <SmartCategory>[];
   String? _errorMessage;
   int? _selectedAccountId;
+  String? _selectedSmartCategoryId;
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _smartListEnabled = true;
   TransferRecipientMode _mode = TransferRecipientMode.user;
 
   @override
   void initState() {
     super.initState();
     _mode = widget.preferredMode;
-    _loadAccounts();
+    _loadData();
   }
 
   @override
@@ -54,7 +59,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
       });
     }
     if (oldWidget.refreshSignal != widget.refreshSignal) {
-      _loadAccounts();
+      _loadData();
     }
   }
 
@@ -66,21 +71,34 @@ class _TransfersScreenState extends State<TransfersScreen> {
     super.dispose();
   }
 
-  Future<void> _loadAccounts() async {
+  Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final accounts = await widget.apiService.fetchAccounts();
+      final results = await Future.wait<dynamic>(<Future<dynamic>>[
+        widget.apiService.fetchAccounts(),
+        widget.apiService.getSmartListEnabled(),
+        widget.apiService.fetchSmartCategories(),
+      ]);
       if (!mounted) {
         return;
       }
 
+      final accounts = results[0] as List<AccountModel>;
+      final smartListEnabled = results[1] as bool;
+      final smartCategories = results[2] as List<SmartCategory>;
+
       setState(() {
         _accounts = accounts;
+        _smartListEnabled = smartListEnabled;
+        _smartCategories = smartCategories;
         _selectedAccountId ??= accounts.first.id;
+        if (!_smartCategories.any((item) => item.id == _selectedSmartCategoryId)) {
+          _selectedSmartCategoryId = null;
+        }
         _isLoading = false;
       });
     } catch (error) {
@@ -127,6 +145,25 @@ class _TransfersScreenState extends State<TransfersScreen> {
             ? null
             : _noteController.text.trim(),
       );
+
+      if (kDebugMode) {
+        final smartCategory = _smartCategories.where(
+          (item) => item.id == _selectedSmartCategoryId,
+        );
+        final selectedCategory =
+            smartCategory.isEmpty ? null : smartCategory.first;
+        await widget.apiService.createTransaction(
+          accountId: _selectedAccountId!,
+          title: _transactionTitle(recipientName),
+          counterparty: recipientName,
+          amount: amount,
+          type: _mode == TransferRecipientMode.user ? 'TRANSFER' : 'PURCHASE',
+          category: selectedCategory?.name ?? _defaultTransactionCategory(),
+          iconKey: _mode == TransferRecipientMode.user ? 'transfer' : 'shopping',
+          smartCategoryId: _selectedSmartCategoryId,
+        );
+      }
+
       if (!mounted) {
         return;
       }
@@ -134,9 +171,10 @@ class _TransfersScreenState extends State<TransfersScreen> {
       _recipientController.clear();
       _amountController.clear();
       _noteController.clear();
+      _selectedSmartCategoryId = null;
       widget.onDataChanged();
       _showMessage(result.message);
-      await _loadAccounts();
+      await _loadData();
     } on ApiException catch (error) {
       _showMessage(error.message);
     } catch (error) {
@@ -188,6 +226,23 @@ class _TransfersScreenState extends State<TransfersScreen> {
     };
   }
 
+  String _defaultTransactionCategory() {
+    return switch (_mode) {
+      TransferRecipientMode.user => 'Переводы',
+      TransferRecipientMode.merchant => 'Покупки',
+    };
+  }
+
+  String _transactionTitle(String recipientName) {
+    if (_noteController.text.trim().isNotEmpty) {
+      return _noteController.text.trim();
+    }
+    return switch (_mode) {
+      TransferRecipientMode.user => 'Перевод $recipientName',
+      TransferRecipientMode.merchant => 'Оплата $recipientName',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -214,7 +269,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
     );
 
     return RefreshIndicator(
-      onRefresh: _loadAccounts,
+      onRefresh: _loadData,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
         children: <Widget>[
@@ -282,7 +337,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
                         (account) => DropdownMenuItem<int>(
                           value: account.id,
                           child: Text(
-                            '${_displayAccountName(account.name)} \u2022 ${SomFormatter.amount(account.balance)}',
+                            '${_displayAccountName(account.name)} • ${SomFormatter.amount(account.balance)}',
                           ),
                         ),
                       )
@@ -309,6 +364,39 @@ class _TransfersScreenState extends State<TransfersScreen> {
                   controller: _noteController,
                   decoration: _inputDecoration('Комментарий'),
                 ),
+                if (_smartListEnabled) ...<Widget>[
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String?>(
+                    initialValue: _selectedSmartCategoryId,
+                    isExpanded: true,
+                    dropdownColor: AppTheme.surfaceSoft,
+                    decoration: _inputDecoration('Smart-категория'),
+                    items: <DropdownMenuItem<String?>>[
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Без smart-категории'),
+                      ),
+                      ..._smartCategories.map(
+                        (category) => DropdownMenuItem<String?>(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) => setState(() {
+                      _selectedSmartCategoryId = value;
+                    }),
+                  ),
+                  if (_smartCategories.isEmpty) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Smart List включен, но категории пока пустые. Их можно добавить на экране анализа.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.secondaryText,
+                      ),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 10,
@@ -424,53 +512,46 @@ class _SourceAccountPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.2),
+        color: AppTheme.surfaceSoft,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white10),
       ),
       child: Row(
         children: <Widget>[
           Container(
-            width: 46,
-            height: 46,
+            width: 44,
+            height: 44,
             decoration: const BoxDecoration(
+              color: AppTheme.accent,
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: <Color>[Color(0xFF18B869), Color(0xFF00773D)],
-              ),
             ),
             alignment: Alignment.center,
-            child: const Text(
-              'С',
-              style: TextStyle(
+            child: Text(
+              'C',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  switch (account.name) {
-                    'Main' => 'Основной счет',
-                    'Savings' => 'Сбережения',
-                    _ => account.name,
-                  },
+                  account.name == 'Main' ? 'Основной счет' : account.name,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   SomFormatter.amount(account.balance),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.secondaryText,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],

@@ -2,7 +2,9 @@ import '../contracts/dashboard_repository.dart';
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
+import '../models/save_suggestion_model.dart';
 import '../models/scheduled_payment_model.dart';
+import '../models/smart_category_model.dart';
 import '../models/subscription_model.dart';
 import '../models/transaction_model.dart';
 
@@ -112,6 +114,28 @@ class MbankAdapter implements DashboardRepository {
   }
 
   @override
+  Future<ScheduledPaymentModel> createReminderScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+    required bool isReminder,
+  }) async {
+    final created = await _client.createReminderScheduledPayment(
+      accountId: accountId,
+      title: title,
+      counterparty: counterparty,
+      category: category,
+      amount: amount,
+      dueDate: dueDate,
+      isReminder: isReminder,
+    );
+    return _mapScheduledPayment(created);
+  }
+
+  @override
   Future<void> createLoan({
     required int accountId,
     required String title,
@@ -124,6 +148,76 @@ class MbankAdapter implements DashboardRepository {
       title: title,
       amount: amount,
       dueDate: dueDate,
+    );
+  }
+
+  @override
+  Future<TransactionModel> createTransaction({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required double amount,
+    required String type,
+    required String category,
+    required String iconKey,
+    String? smartCategoryId,
+  }) async {
+    final created = await _client.createTransaction(
+      accountId: accountId,
+      title: title,
+      counterparty: counterparty,
+      amount: amount,
+      type: type,
+      category: category,
+      iconKey: iconKey,
+      smartCategoryId: smartCategoryId,
+    );
+    return _mapTransaction(created);
+  }
+
+  @override
+  Future<List<SmartCategory>> fetchSmartCategories() async {
+    final categories = await _client.getSmartCategories();
+    return categories.map(_mapSmartCategory).toList(growable: false);
+  }
+
+  @override
+  Future<SmartCategory> createSmartCategory({
+    required String name,
+    required double plannedMonthly,
+  }) async {
+    final created = await _client.createSmartCategory(
+      name: name,
+      plannedMonthly: plannedMonthly,
+    );
+    return _mapSmartCategory(created);
+  }
+
+  @override
+  Future<void> deleteSmartCategory(String categoryId) {
+    // TODO: Confirm the real MBank smart-category deletion endpoint.
+    return _client.deleteSmartCategory(categoryId);
+  }
+
+  @override
+  Future<bool> getSmartListEnabled() {
+    // TODO: Confirm where MBank stores Smart List settings.
+    return _client.getSmartListEnabled();
+  }
+
+  @override
+  Future<void> setSmartListEnabled(bool enabled) {
+    // TODO: Confirm the real MBank Smart List toggle endpoint.
+    return _client.setSmartListEnabled(enabled);
+  }
+
+  @override
+  Future<SaveSuggestionModel> suggestEndOfMonthSave() async {
+    final suggestion = await _client.suggestEndOfMonthSave();
+    return SaveSuggestionModel(
+      amount: suggestion.amount,
+      reason: suggestion.reason,
+      safetyReserve: suggestion.safetyReserve,
     );
   }
 
@@ -193,6 +287,17 @@ class MbankAdapter implements DashboardRepository {
       amount: payment.amount,
       dueDate: dueDate,
       status: payment.status.isEmpty ? 'SCHEDULED' : payment.status,
+      isReminder: payment.isReminder,
+    );
+  }
+
+  SmartCategory _mapSmartCategory(ExistingMbankSmartCategory category) {
+    return SmartCategory(
+      id: category.id,
+      // TODO: Confirm the smart budget DTO field names with the real MBank API.
+      name: category.name.isEmpty ? 'Категория' : category.name,
+      plannedMonthly: category.plannedMonthly,
+      remaining: category.remaining,
     );
   }
 
@@ -240,12 +345,48 @@ abstract class ExistingMbankClient {
     required DateTime dueDate,
   });
 
+  Future<ExistingMbankScheduledPayment> createReminderScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+    required bool isReminder,
+  });
+
   Future<void> createLoan({
     required int accountId,
     required String title,
     required double amount,
     required DateTime dueDate,
   });
+
+  Future<ExistingMbankTransaction> createTransaction({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required double amount,
+    required String type,
+    required String category,
+    required String iconKey,
+    String? smartCategoryId,
+  });
+
+  Future<List<ExistingMbankSmartCategory>> getSmartCategories();
+
+  Future<ExistingMbankSmartCategory> createSmartCategory({
+    required String name,
+    required double plannedMonthly,
+  });
+
+  Future<void> deleteSmartCategory(String categoryId);
+
+  Future<bool> getSmartListEnabled();
+
+  Future<void> setSmartListEnabled(bool enabled);
+
+  Future<ExistingMbankSaveSuggestion> suggestEndOfMonthSave();
 }
 
 class ExistingMbankSubscription {
@@ -467,6 +608,7 @@ class ExistingMbankScheduledPayment {
     required this.amount,
     required this.dueDate,
     required this.status,
+    required this.isReminder,
   });
 
   final int id;
@@ -479,6 +621,7 @@ class ExistingMbankScheduledPayment {
   final double amount;
   final DateTime? dueDate;
   final String status;
+  final bool isReminder;
 
   factory ExistingMbankScheduledPayment.fromJson(Map<String, dynamic> json) {
     return ExistingMbankScheduledPayment(
@@ -492,6 +635,50 @@ class ExistingMbankScheduledPayment {
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       dueDate: _dateFromJson(json['dueDate']),
       status: json['status'] as String? ?? '',
+      isReminder: json['isReminder'] as bool? ?? true,
+    );
+  }
+}
+
+class ExistingMbankSmartCategory {
+  const ExistingMbankSmartCategory({
+    required this.id,
+    required this.name,
+    required this.plannedMonthly,
+    required this.remaining,
+  });
+
+  final String id;
+  final String name;
+  final double plannedMonthly;
+  final double remaining;
+
+  factory ExistingMbankSmartCategory.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankSmartCategory(
+      id: json['id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      plannedMonthly: (json['plannedMonthly'] as num?)?.toDouble() ?? 0.0,
+      remaining: (json['remaining'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ExistingMbankSaveSuggestion {
+  const ExistingMbankSaveSuggestion({
+    required this.amount,
+    required this.reason,
+    required this.safetyReserve,
+  });
+
+  final double amount;
+  final String reason;
+  final double safetyReserve;
+
+  factory ExistingMbankSaveSuggestion.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankSaveSuggestion(
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      reason: json['reason'] as String? ?? '',
+      safetyReserve: (json['safetyReserve'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/account_model.dart';
 import '../models/transaction_model.dart';
 import '../services/bank_api_service.dart';
+import '../screens/my_bank_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
 import '../widgets/bank_card_preview.dart';
@@ -75,6 +76,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<void> _openMyBankScreen(List<AccountModel> accounts) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MyBankScreen(accounts: accounts),
+      ),
+    );
   }
 
   @override
@@ -153,13 +162,17 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 18),
           const SizedBox(height: 156, child: _HeroBannerRow()),
           const SizedBox(height: 18),
-          BankCardPreview(account: mainAccount, cardLabel: '\u2022\u20220484'),
+          BankCardPreview(
+            account: mainAccount,
+            cardLabel: '\u2022\u20220484',
+            onTap: () => _openMyBankScreen(accounts),
+          ),
           const SizedBox(height: 18),
           const _ShortcutStrip(),
           const SizedBox(height: 28),
           const _ScrolledBannerRow(),
           const SizedBox(height: 18),
-          const _MyBankCard(),
+          _MyBankCard(onTap: () => _openMyBankScreen(accounts)),
           const SizedBox(height: 18),
           const _MarketplacePanel(),
           const SizedBox(height: 18),
@@ -693,17 +706,24 @@ class _WidePromoCard extends StatelessWidget {
 }
 
 class _MyBankCard extends StatelessWidget {
-  const _MyBankCard();
+  const _MyBankCard({this.onTap});
+
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
         children: <Widget>[
           Container(
             width: 56,
@@ -749,6 +769,8 @@ class _MyBankCard extends StatelessWidget {
             ),
           ),
         ],
+          ),
+        ),
       ),
     );
   }

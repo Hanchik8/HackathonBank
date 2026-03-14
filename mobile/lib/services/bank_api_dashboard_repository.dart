@@ -47,6 +47,25 @@ class BankApiDashboardRepository implements DashboardRepository {
   }
 
   @override
+  Future<ScheduledPaymentModel> createReminderScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+    required bool isReminder,
+  }) => _apiService.createReminderScheduledPayment(
+    accountId: accountId,
+    title: title,
+    counterparty: counterparty,
+    category: category,
+    amount: amount,
+    dueDate: dueDate,
+    isReminder: isReminder,
+  );
+
+  @override
   Future<void> createLoan({
     required int accountId,
     required String title,
@@ -58,6 +77,55 @@ class BankApiDashboardRepository implements DashboardRepository {
     amount: amount,
     dueDate: dueDate,
   );
+
+  @override
+  Future<TransactionModel> createTransaction({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required double amount,
+    required String type,
+    required String category,
+    required String iconKey,
+    String? smartCategoryId,
+  }) => _apiService.createTransaction(
+    accountId: accountId,
+    title: title,
+    counterparty: counterparty,
+    amount: amount,
+    type: type,
+    category: category,
+    iconKey: iconKey,
+    smartCategoryId: smartCategoryId,
+  );
+
+  @override
+  Future<List<SmartCategory>> fetchSmartCategories() =>
+      _apiService.fetchSmartCategories();
+
+  @override
+  Future<SmartCategory> createSmartCategory({
+    required String name,
+    required double plannedMonthly,
+  }) => _apiService.createSmartCategory(
+    name: name,
+    plannedMonthly: plannedMonthly,
+  );
+
+  @override
+  Future<void> deleteSmartCategory(String categoryId) =>
+      _apiService.deleteSmartCategory(categoryId);
+
+  @override
+  Future<bool> getSmartListEnabled() => _apiService.getSmartListEnabled();
+
+  @override
+  Future<void> setSmartListEnabled(bool enabled) =>
+      _apiService.setSmartListEnabled(enabled);
+
+  @override
+  Future<SaveSuggestionModel> suggestEndOfMonthSave() =>
+      _apiService.suggestEndOfMonthSave();
 
   @override
   Future<List<SubscriptionModel>> fetchSubscriptions() =>

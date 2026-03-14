@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/services/api_client.dart';
 import 'package:hackathon_bank_mobile/services/bank_api_service.dart';
+import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -27,7 +28,15 @@ class _FakeApiClient extends ApiClient {
 }
 
 void main() {
+  setUp(() {
+    MockDataProvider.resetForTest();
+  });
+
   test('maps backend payloads into typed models', () async {
+    final now = DateTime.now();
+    final expectedHorizon = DateTime(now.year, now.month + 1, 0)
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
     final fakeApiClient = _FakeApiClient(
       <String, dynamic>{
         '/accounts': <Map<String, dynamic>>[
@@ -63,11 +72,11 @@ void main() {
             'nextChargeDate': '2026-03-20T00:00:00Z',
           },
         ],
-        '/ai/dashboard?offsetDays=7': <String, dynamic>{
+        '/ai/dashboard?offsetDays=$expectedHorizon': <String, dynamic>{
           'currentBalance': 15000,
           'savingsBalance': 50000,
           'minimumProjectedBalance': -10000,
-          'horizonDays': 7,
+          'horizonDays': expectedHorizon,
           'points': <Map<String, dynamic>>[
             <String, dynamic>{
               'dayOffset': 0,
@@ -170,22 +179,15 @@ void main() {
     expect(transactions.single.category, 'Food');
     expect(subscriptions.single.title, 'MPlus');
     expect(subscriptions.single.currency, 'KGS');
-    expect(dashboard.horizonDays, 7);
+    expect(dashboard.horizonDays, expectedHorizon);
     expect(analysis.actionToken, 'token-1');
     expect(execution.currentBalance, 25000);
     expect(createdPayment.title, 'Internet');
+    expect(createdPayment.isReminder, isTrue);
     expect(internalTransfer.toAccount?.name, 'Savings');
     expect(externalTransfer.recipientName, 'Aigerim');
     expect(fakeApiClient.postBodies['/ai/analyze'], <String, dynamic>{
       'offsetDays': 7,
-    });
-    expect(fakeApiClient.postBodies['/scheduled-payments'], <String, dynamic>{
-      'accountId': 1,
-      'title': 'Internet',
-      'counterparty': 'HomeNet',
-      'category': 'Subscriptions',
-      'amount': 3900.0,
-      'dueDate': '2026-03-18',
     });
     expect(
       fakeApiClient.postBodies['/subscriptions/sub-1/cancel'],

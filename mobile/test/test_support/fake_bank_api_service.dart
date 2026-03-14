@@ -1,6 +1,8 @@
 import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_analysis_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
+import 'package:hackathon_bank_mobile/models/save_suggestion_model.dart';
+import 'package:hackathon_bank_mobile/models/smart_category_model.dart';
 import 'package:hackathon_bank_mobile/models/transaction_model.dart';
 import 'package:hackathon_bank_mobile/models/transfer_result_model.dart';
 import 'package:hackathon_bank_mobile/services/api_client.dart';
@@ -123,6 +125,31 @@ List<ScheduledPaymentModel> sampleScheduledPayments() {
   ];
 }
 
+List<SmartCategory> sampleSmartCategories() {
+  return const <SmartCategory>[
+    SmartCategory(
+      id: 'food',
+      name: 'Еда',
+      plannedMonthly: 12000,
+      remaining: 8800,
+    ),
+    SmartCategory(
+      id: 'transfer',
+      name: 'Переводы',
+      plannedMonthly: 9000,
+      remaining: 7500,
+    ),
+  ];
+}
+
+SaveSuggestionModel sampleSaveSuggestion() {
+  return const SaveSuggestionModel(
+    amount: 6200,
+    reason: 'До конца месяца остается свободный остаток после учета платежей и лимитов.',
+    safetyReserve: 3000,
+  );
+}
+
 AiDashboardModel sampleDashboard([
   List<ScheduledPaymentModel>? scheduledPayments,
 ]) {
@@ -190,12 +217,18 @@ class FakeBankApiService extends BankApiService {
     AiDashboardModel? dashboard,
     AiAnalysisModel? analysis,
     AiExecutionModel? execution,
+    List<SmartCategory>? smartCategories,
+    SaveSuggestionModel? saveSuggestion,
     TransferResultModel? transferResult,
     TransferResultModel? internalTransferResult,
   }) : _accounts = accounts ?? sampleAccounts(),
        _transactions = transactions ?? sampleTransactions(),
        _analysis = analysis ?? sampleAnalysis(),
        _execution = execution ?? sampleExecution(),
+       _smartCategories = List<SmartCategory>.from(
+         smartCategories ?? sampleSmartCategories(),
+       ),
+       _saveSuggestion = saveSuggestion ?? sampleSaveSuggestion(),
        _transferResult = transferResult ?? sampleTransferResult(),
        _internalTransferResult =
            internalTransferResult ?? sampleInternalTransferResult(),
@@ -207,13 +240,16 @@ class FakeBankApiService extends BankApiService {
 
   final List<AccountModel> _accounts;
   final List<TransactionModel> _transactions;
+  final List<SmartCategory> _smartCategories;
   final AiDashboardModel _dashboardTemplate;
   final AiAnalysisModel _analysis;
   final AiExecutionModel _execution;
+  final SaveSuggestionModel _saveSuggestion;
   final TransferResultModel _transferResult;
   final TransferResultModel _internalTransferResult;
   final List<ScheduledPaymentModel> _scheduledPayments;
   double _loanBalanceDelta = 0;
+  bool _smartListEnabled = true;
 
   final List<int> dashboardRequests = <int>[];
   final List<int> analyzeRequests = <int>[];
@@ -227,12 +263,36 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastScheduledPaymentDraft;
   int createLoanCalls = 0;
   Map<String, Object?>? lastLoanDraft;
+  int createTransactionCalls = 0;
+  Map<String, Object?>? lastTransactionDraft;
+  int createSmartCategoryCalls = 0;
+  Map<String, Object?>? lastSmartCategoryDraft;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
 
   @override
   Future<List<TransactionModel>> fetchTransactions() async => _transactions;
+
+  @override
+  Future<List<SmartCategory>> fetchSmartCategories() async =>
+      _smartListEnabled ? _smartCategories : const <SmartCategory>[];
+
+  @override
+  Future<SaveSuggestionModel> suggestEndOfMonthSave() async => _saveSuggestion;
+
+  @override
+  Future<bool> getSmartListEnabled() async => _smartListEnabled;
+
+  @override
+  Future<void> setSmartListEnabled(bool enabled) async {
+    _smartListEnabled = enabled;
+  }
+
+  @override
+  Future<void> deleteSmartCategory(String categoryId) async {
+    _smartCategories.removeWhere((category) => category.id == categoryId);
+  }
 
   @override
   Future<AiDashboardModel> fetchDashboard(int offsetDays) async {
@@ -278,6 +338,27 @@ class FakeBankApiService extends BankApiService {
     required String category,
     required double amount,
     required DateTime dueDate,
+  }) {
+    return createReminderScheduledPayment(
+      accountId: accountId,
+      title: title,
+      counterparty: counterparty,
+      category: category,
+      amount: amount,
+      dueDate: dueDate,
+      isReminder: true,
+    );
+  }
+
+  @override
+  Future<ScheduledPaymentModel> createReminderScheduledPayment({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required String category,
+    required double amount,
+    required DateTime dueDate,
+    required bool isReminder,
   }) async {
     createScheduledPaymentCalls += 1;
     lastScheduledPaymentDraft = <String, Object?>{
@@ -287,6 +368,7 @@ class FakeBankApiService extends BankApiService {
       'category': category,
       'amount': amount,
       'dueDate': dueDate,
+      'isReminder': isReminder,
     };
     final account = _accounts.firstWhere((item) => item.id == accountId);
     final payment = ScheduledPaymentModel(
@@ -300,6 +382,7 @@ class FakeBankApiService extends BankApiService {
       amount: amount,
       dueDate: dueDate,
       status: 'SCHEDULED',
+      isReminder: isReminder,
     );
     _scheduledPayments.add(payment);
     _scheduledPayments.sort(
@@ -341,6 +424,78 @@ class FakeBankApiService extends BankApiService {
     _scheduledPayments.sort(
       (left, right) => left.dueDate.compareTo(right.dueDate),
     );
+  }
+
+  @override
+  Future<TransactionModel> createTransaction({
+    required int accountId,
+    required String title,
+    required String counterparty,
+    required double amount,
+    required String type,
+    required String category,
+    required String iconKey,
+    String? smartCategoryId,
+  }) async {
+    createTransactionCalls += 1;
+    lastTransactionDraft = <String, Object?>{
+      'accountId': accountId,
+      'title': title,
+      'counterparty': counterparty,
+      'amount': amount,
+      'type': type,
+      'category': category,
+      'iconKey': iconKey,
+      'smartCategoryId': smartCategoryId,
+    };
+    if (smartCategoryId != null) {
+      final index = _smartCategories.indexWhere((item) => item.id == smartCategoryId);
+      if (index >= 0) {
+        final current = _smartCategories[index];
+        _smartCategories[index] = SmartCategory(
+          id: current.id,
+          name: current.name,
+          plannedMonthly: current.plannedMonthly,
+          remaining: current.remaining - amount,
+        );
+      }
+    }
+
+    final account = _accounts.firstWhere((item) => item.id == accountId);
+    final transaction = TransactionModel(
+      id: 300 + createTransactionCalls,
+      title: title,
+      counterparty: counterparty,
+      amount: -amount,
+      category: category,
+      iconKey: iconKey,
+      type: type,
+      status: 'COMPLETED',
+      accountName: account.name,
+      occurredAt: DateTime.now(),
+    );
+    _transactions.insert(0, transaction);
+    return transaction;
+  }
+
+  @override
+  Future<SmartCategory> createSmartCategory({
+    required String name,
+    required double plannedMonthly,
+  }) async {
+    createSmartCategoryCalls += 1;
+    lastSmartCategoryDraft = <String, Object?>{
+      'name': name,
+      'plannedMonthly': plannedMonthly,
+    };
+    final category = SmartCategory(
+      id: 'smart-$createSmartCategoryCalls',
+      name: name,
+      plannedMonthly: plannedMonthly,
+      remaining: plannedMonthly,
+    );
+    _smartCategories.add(category);
+    return category;
   }
 
   @override

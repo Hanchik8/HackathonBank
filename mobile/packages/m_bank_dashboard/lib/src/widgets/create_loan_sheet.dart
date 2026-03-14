@@ -5,28 +5,22 @@ import '../theme/app_date_formatter.dart';
 import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
 
-class ScheduledPaymentDraft {
-  const ScheduledPaymentDraft({
+class LoanDraft {
+  const LoanDraft({
     required this.accountId,
     required this.title,
-    required this.counterparty,
-    required this.category,
     required this.amount,
     required this.dueDate,
-    required this.isReminder,
   });
 
   final int accountId;
   final String title;
-  final String counterparty;
-  final String category;
   final double amount;
   final DateTime dueDate;
-  final bool isReminder;
 }
 
-class ScheduledPaymentFormSheet extends StatefulWidget {
-  const ScheduledPaymentFormSheet({
+class CreateLoanSheet extends StatefulWidget {
+  const CreateLoanSheet({
     super.key,
     required this.accounts,
     required this.initialOffsetDays,
@@ -36,29 +30,16 @@ class ScheduledPaymentFormSheet extends StatefulWidget {
   final int initialOffsetDays;
 
   @override
-  State<ScheduledPaymentFormSheet> createState() =>
-      _ScheduledPaymentFormSheetState();
+  State<CreateLoanSheet> createState() => _CreateLoanSheetState();
 }
 
-class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
-  static const List<String> _quickCategories = <String>[
-    'Аренда',
-    'Подписки',
-    'Коммунальные',
-    'Образование',
-    'Страхование',
-    'Покупки',
-  ];
-
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _counterpartyController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _categoryController = TextEditingController(
-    text: _quickCategories.first,
+class _CreateLoanSheetState extends State<CreateLoanSheet> {
+  final TextEditingController _titleController = TextEditingController(
+    text: 'Экспресс-кредит',
   );
+  final TextEditingController _amountController = TextEditingController();
 
   int? _accountId;
-  bool _isReminder = true;
   late DateTime _selectedDate;
 
   @override
@@ -76,9 +57,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
   @override
   void dispose() {
     _titleController.dispose();
-    _counterpartyController.dispose();
     _amountController.dispose();
-    _categoryController.dispose();
     super.dispose();
   }
 
@@ -114,27 +93,19 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
   }
 
   void _submit() {
+    final accountId = _accountId;
     final title = _titleController.text.trim();
-    final counterparty = _counterpartyController.text.trim();
     final amount = double.tryParse(_amountController.text.replaceAll(',', '.'));
-    final category = _categoryController.text.trim();
-    if (_accountId == null ||
-        title.isEmpty ||
-        category.isEmpty ||
-        amount == null ||
-        amount <= 0) {
+    if (accountId == null || title.isEmpty || amount == null || amount <= 0) {
       return;
     }
 
     Navigator.of(context).pop(
-      ScheduledPaymentDraft(
-        accountId: _accountId!,
+      LoanDraft(
+        accountId: accountId,
         title: title,
-        counterparty: counterparty.isEmpty ? title : counterparty,
-        category: category,
         amount: amount,
         dueDate: _selectedDate,
-        isReminder: _isReminder,
       ),
     );
   }
@@ -171,14 +142,14 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
               ),
               const SizedBox(height: 18),
               Text(
-                'Новый отложенный платеж',
+                'Новый кредит',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
-                'Добавьте будущее списание, и ИИ сразу учтет его в прогнозе.',
+                'В демо-режиме кредит сразу пополнит выбранный счет и появится в прогнозе как будущее погашение.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppTheme.secondaryText,
                   height: 1.45,
@@ -189,7 +160,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 initialValue: _accountId,
                 isExpanded: true,
                 dropdownColor: AppTheme.surfaceSoft,
-                decoration: _inputDecoration('Счет списания'),
+                decoration: _inputDecoration('Счет зачисления'),
                 items: widget.accounts
                     .map(
                       (account) => DropdownMenuItem<int>(
@@ -206,66 +177,17 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
               const SizedBox(height: 14),
               TextField(
                 controller: _titleController,
-                decoration: _inputDecoration('Название платежа'),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _counterpartyController,
-                decoration: _inputDecoration('Получатель'),
+                decoration: _inputDecoration('Название кредита'),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: _inputDecoration('Сумма в KGS'),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _categoryController,
-                decoration: _inputDecoration('Категория'),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _quickCategories
-                    .map(
-                      (category) => _SelectableChip(
-                        label: category,
-                        selected: _categoryController.text.trim() == category,
-                        onTap: () => setState(() {
-                          _categoryController.text = category;
-                        }),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 18),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                value: _isReminder,
-                activeTrackColor: AppTheme.accent,
-                title: Text(
-                  'Напоминание для прогноза',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                subtitle: Text(
-                  _isReminder
-                      ? 'Будет выделено как напоминание в списке будущих списаний.'
-                      : 'Будет учтено как обычный обязательный платеж.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-                onChanged: (value) => setState(() => _isReminder = value),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: _inputDecoration('Сумма кредита в KGS'),
               ),
               const SizedBox(height: 18),
               Text(
-                'Когда списать',
+                'Дата погашения',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: AppTheme.secondaryText,
                 ),
@@ -287,7 +209,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Text(
-                  'Дата списания: ${AppDateFormatter.shortDate(_selectedDate)}',
+                  'Дата погашения: ${AppDateFormatter.shortDate(_selectedDate)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -298,7 +220,7 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
-                  child: const Text('Запланировать платеж'),
+                  child: const Text('Создать кредит'),
                 ),
               ),
             ],
@@ -335,41 +257,5 @@ class _ScheduledPaymentFormSheetState extends State<ScheduledPaymentFormSheet> {
       'Savings' => 'Сбережения',
       _ => name,
     };
-  }
-}
-
-class _SelectableChip extends StatelessWidget {
-  const _SelectableChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accent : AppTheme.surfaceSoft,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: selected ? Colors.black : Colors.white,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
-    );
   }
 }

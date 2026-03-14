@@ -1,9 +1,13 @@
+// ignore_for_file: unused_element
+
 import 'package:flutter/material.dart';
 
 import '../contracts/dashboard_repository.dart';
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
+import '../models/save_suggestion_model.dart';
+import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
 import '../theme/app_date_formatter.dart';
 import '../theme/app_theme.dart';
@@ -12,10 +16,14 @@ import '../widgets/action_circle_button.dart';
 import '../widgets/ai_alert_card.dart';
 import '../widgets/analysis_category_row.dart';
 import '../widgets/analysis_insight_card.dart';
+import '../widgets/create_loan_sheet.dart';
 import '../widgets/forecast_chart.dart';
 import '../widgets/mini_badge.dart';
 import '../widgets/scheduled_payment_form_sheet.dart';
 import '../widgets/segmented_spend_bar.dart';
+import '../widgets/smart_category_form_sheet.dart';
+import '../widgets/smart_list_card.dart';
+import '../widgets/transaction_capture_sheet.dart';
 import '../widgets/upcoming_payments_card.dart';
 
 class AiDashboardScreen extends StatefulWidget {
@@ -37,18 +45,26 @@ class AiDashboardScreen extends StatefulWidget {
 class _AiDashboardScreenState extends State<AiDashboardScreen> {
   AiDashboardModel? _dashboard;
   AiAnalysisModel? _analysis;
+  SaveSuggestionModel? _saveSuggestion;
   List<TransactionModel>? _transactions;
   List<AccountModel>? _accounts;
+  List<SmartCategory>? _smartCategories;
   String? _errorMessage;
   bool _isLoading = true;
   bool _isExecuting = false;
   bool _isCreatingPayment = false;
   bool _isCreatingLoan = false;
-  int _offsetDays = 10;
+  bool _isCreatingTransaction = false;
+  bool _isCreatingCategory = false;
+  bool _isTogglingSmartList = false;
+  bool _smartListEnabled = true;
+  String? _deletingCategoryId;
+  late int _offsetDays;
 
   @override
   void initState() {
     super.initState();
+    _offsetDays = _daysUntilEndOfMonth();
     _loadData();
   }
 
@@ -61,6 +77,12 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   }
 
   Future<void> _loadData() async {
+    final maxDays = _daysUntilEndOfMonth();
+    final requestOffset = _offsetDays.clamp(0, maxDays);
+    if (_offsetDays != requestOffset) {
+      _offsetDays = requestOffset;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -68,10 +90,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
     try {
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
-        widget.repository.fetchDashboard(_offsetDays),
-        widget.repository.analyzeCashFlow(_offsetDays),
+        widget.repository.fetchDashboard(requestOffset),
+        widget.repository.analyzeCashFlow(requestOffset),
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
+        widget.repository.fetchSmartCategories(),
+        widget.repository.suggestEndOfMonthSave(),
+        widget.repository.getSmartListEnabled(),
       ]);
 
       if (!mounted) {
@@ -83,6 +108,9 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _analysis = results[1] as AiAnalysisModel;
         _transactions = results[2] as List<TransactionModel>;
         _accounts = results[3] as List<AccountModel>;
+        _smartCategories = results[4] as List<SmartCategory>;
+        _saveSuggestion = results[5] as SaveSuggestionModel;
+        _smartListEnabled = results[6] as bool;
         _isLoading = false;
       });
     } catch (error) {
@@ -145,7 +173,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => ScheduledPaymentFormSheet(
         accounts: accounts,
-        initialOffsetDays: _offsetDays.clamp(3, 10),
+        initialOffsetDays: _initialSheetOffset(),
       ),
     );
 
@@ -165,20 +193,22 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     });
 
     try {
-      final created = await widget.repository.createScheduledPayment(
+      final created = await widget.repository.createReminderScheduledPayment(
         accountId: draft.accountId,
         title: draft.title,
         counterparty: draft.counterparty,
         category: draft.category,
         amount: draft.amount,
         dueDate: draft.dueDate,
+        isReminder: draft.isReminder,
       );
       if (!mounted) {
         return;
       }
 
       final dueInDays = _daysUntil(created.dueDate);
-      if (dueInDays > _offsetDays && dueInDays <= 10) {
+      final maxDays = _daysUntilEndOfMonth();
+      if (dueInDays > _offsetDays && dueInDays <= maxDays) {
         setState(() {
           _offsetDays = dueInDays;
         });
@@ -210,13 +240,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       return;
     }
 
-    final draft = await showModalBottomSheet<_LoanDraft>(
+    final draft = await showModalBottomSheet<LoanDraft>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _CreateLoanSheet(
+      builder: (context) => CreateLoanSheet(
         accounts: accounts,
-        initialOffsetDays: _offsetDays.clamp(3, 10),
+        initialOffsetDays: _initialSheetOffset(),
       ),
     );
 
@@ -226,7 +256,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     await _createLoan(draft);
   }
 
-  Future<void> _createLoan(_LoanDraft draft) async {
+  Future<void> _createLoan(LoanDraft draft) async {
     if (_isCreatingLoan) {
       return;
     }
@@ -247,7 +277,8 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
 
       final dueInDays = _daysUntil(draft.dueDate);
-      if (dueInDays > _offsetDays && dueInDays <= 10) {
+      final maxDays = _daysUntilEndOfMonth();
+      if (dueInDays > _offsetDays && dueInDays <= maxDays) {
         setState(() {
           _offsetDays = dueInDays;
         });
@@ -268,6 +299,209 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       if (mounted) {
         setState(() {
           _isCreatingLoan = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openCreateTransactionSheet() async {
+    final accounts = _accounts;
+    final smartCategories = _smartCategories;
+    if (accounts == null ||
+        accounts.isEmpty ||
+        _isCreatingTransaction) {
+      return;
+    }
+
+    final draft = await showModalBottomSheet<TransactionCaptureDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => TransactionCaptureSheet(
+        accounts: accounts,
+        smartCategories: smartCategories ?? const <SmartCategory>[],
+        smartListEnabled: _smartListEnabled,
+      ),
+    );
+
+    if (draft == null) {
+      return;
+    }
+    await _createTransaction(draft);
+  }
+
+  Future<void> _createTransaction(TransactionCaptureDraft draft) async {
+    if (_isCreatingTransaction) {
+      return;
+    }
+
+    setState(() {
+      _isCreatingTransaction = true;
+    });
+
+    try {
+      await widget.repository.createTransaction(
+        accountId: draft.accountId,
+        title: draft.title,
+        counterparty: draft.counterparty,
+        amount: draft.amount,
+        type: draft.type,
+        category: draft.categoryLabel,
+        iconKey: draft.iconKey,
+        smartCategoryId: draft.smartCategoryId,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      widget.onDataChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            draft.smartCategoryId == null
+                ? 'Платеж сохранен.'
+                : 'Платеж сохранен и учтен в Smart List.',
+          ),
+        ),
+      );
+      await _loadData();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingTransaction = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openCreateSmartCategorySheet() async {
+    if (_isCreatingCategory) {
+      return;
+    }
+
+    final draft = await showModalBottomSheet<SmartCategoryDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const SmartCategoryFormSheet(),
+    );
+
+    if (draft == null) {
+      return;
+    }
+    await _createSmartCategory(draft);
+  }
+
+  Future<void> _createSmartCategory(SmartCategoryDraft draft) async {
+    if (_isCreatingCategory) {
+      return;
+    }
+
+    setState(() {
+      _isCreatingCategory = true;
+    });
+
+    try {
+      await widget.repository.createSmartCategory(
+        name: draft.name,
+        plannedMonthly: draft.plannedMonthly,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      widget.onDataChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Категория "${draft.name}" добавлена.')),
+      );
+      await _loadData();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingCategory = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteSmartCategory(String categoryId) async {
+    if (_deletingCategoryId != null) {
+      return;
+    }
+
+    setState(() {
+      _deletingCategoryId = categoryId;
+    });
+
+    try {
+      await widget.repository.deleteSmartCategory(categoryId);
+      if (!mounted) {
+        return;
+      }
+
+      widget.onDataChanged();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Категория удалена.')));
+      await _loadData();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _deletingCategoryId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleSmartList() async {
+    if (_isTogglingSmartList) {
+      return;
+    }
+
+    setState(() {
+      _isTogglingSmartList = true;
+    });
+
+    try {
+      await widget.repository.setSmartListEnabled(!_smartListEnabled);
+      if (!mounted) {
+        return;
+      }
+
+      widget.onDataChanged();
+      await _loadData();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTogglingSmartList = false;
         });
       }
     }
@@ -294,15 +528,23 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
     final dashboard = _dashboard!;
     final analysis = _analysis!;
+    final saveSuggestion = _saveSuggestion!;
+    final smartCategories = _smartCategories!;
     final transactions = _transactions!;
     final summary = _buildSummary(transactions, _offsetDays);
     final scheduledPayments = dashboard.scheduledPayments;
+    final reminderCount = scheduledPayments
+        .where((payment) => payment.isReminder)
+        .length;
     final summaryTitle = dashboard.points.isEmpty
         ? 'Последние 30 дней'
         : 'Окно до ${dashboard.points.last.label}';
     final nearestPayment = scheduledPayments.isEmpty
         ? null
         : scheduledPayments.first;
+    final maxDays = _daysUntilEndOfMonth();
+    final sliderMax = maxDays <= 0 ? 1 : maxDays;
+    final sliderValue = _offsetDays.clamp(0, sliderMax).toDouble();
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -332,17 +574,22 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
                 children: <Widget>[
                   ActionCircleButton(
                     icon: Icons.account_balance_wallet_rounded,
                     isLoading: _isCreatingLoan,
                     onTap: _openCreateLoanSheet,
                   ),
-                  const SizedBox(width: 10),
                   ActionCircleButton(
-                    icon: Icons.add_rounded,
+                    icon: Icons.qr_code_rounded,
+                    isLoading: _isCreatingTransaction,
+                    onTap: _openCreateTransactionSheet,
+                  ),
+                  ActionCircleButton(
+                    icon: Icons.add_alert_rounded,
                     isLoading: _isCreatingPayment,
                     onTap: _openScheduledPaymentSheet,
                   ),
@@ -363,7 +610,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
               ),
               AnalysisInsightCard(
                 title: 'Будущие списания',
-                value: '${scheduledPayments.length}',
+                value: '$reminderCount',
                 subtitle: nearestPayment == null
                     ? 'Критичных списаний нет'
                     : 'Ближайшее: ${AppDateFormatter.shortDate(nearestPayment.dueDate)}',
@@ -448,14 +695,21 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                 ),
                 Slider(
                   min: 0,
-                  max: 10,
-                  divisions: 10,
-                  value: _offsetDays.toDouble(),
+                  max: sliderMax.toDouble(),
+                  divisions: sliderMax,
+                  value: sliderValue,
                   label: '$_offsetDays дн.',
                   onChanged: (value) =>
                       setState(() => _offsetDays = value.round()),
                   onChangeEnd: (_) => _loadData(),
                 ),
+                Text(
+                  'Горизонт до конца месяца: $maxDays дн.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.secondaryText,
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
@@ -477,10 +731,47 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             ),
           ),
           const SizedBox(height: 18),
+          if (_smartListEnabled)
+            SmartListCard(
+              categories: smartCategories,
+              onAddCategory: _openCreateSmartCategorySheet,
+              onDeleteCategory: _deleteSmartCategory,
+              deletingCategoryId: _deletingCategoryId,
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Text(
+                'Smart List выключен. Включите его внизу, чтобы снова привязывать платежи к категориям.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.secondaryText,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          const SizedBox(height: 18),
+          _SaveSuggestionCard(suggestion: saveSuggestion),
+          const SizedBox(height: 18),
           UpcomingPaymentsCard(
             payments: scheduledPayments,
             isCreatingPayment: _isCreatingPayment,
             onCreate: _openScheduledPaymentSheet,
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isTogglingSmartList ? null : _toggleSmartList,
+              child: Text(
+                _smartListEnabled
+                    ? 'Выключить Smart List'
+                    : 'Включить Smart List',
+              ),
+            ),
           ),
         ],
       ),
@@ -492,7 +783,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     int offsetDays,
   ) {
     final referenceDate = DateTime.now().add(Duration(days: offsetDays));
-    final windowStart = referenceDate.subtract(const Duration(days: 30));
+    final windowStart = DateTime(referenceDate.year, referenceDate.month, 1);
     final completedTransactions =
         transactions
             .where((transaction) => transaction.status == 'COMPLETED')
@@ -543,6 +834,24 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final dueDateOnly = DateTime(dueDate.year, dueDate.month, dueDate.day);
     final todayOnly = DateTime(now.year, now.month, now.day);
     return dueDateOnly.difference(todayOnly).inDays;
+  }
+
+  int _daysUntilEndOfMonth() {
+    final now = DateTime.now();
+    final todayOnly = DateTime(now.year, now.month, now.day);
+    final monthEnd = DateTime(now.year, now.month + 1, 0);
+    return monthEnd.difference(todayOnly).inDays;
+  }
+
+  int _initialSheetOffset() {
+    final maxDays = _daysUntilEndOfMonth();
+    if (maxDays <= 3) {
+      return maxDays;
+    }
+    if (_offsetDays < 3) {
+      return 3;
+    }
+    return _offsetDays > maxDays ? maxDays : _offsetDays;
   }
 }
 
@@ -691,6 +1000,67 @@ class _BreakdownCard extends StatelessWidget {
   }
 }
 
+class _SaveSuggestionCard extends StatelessWidget {
+  const _SaveSuggestionCard({required this.suggestion});
+
+  final SaveSuggestionModel suggestion;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Совет по накоплению',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            suggestion.amount <= 0
+                ? 'Свободной суммы для перевода в сбережения сейчас нет.'
+                : 'Можно отложить ${SomFormatter.amount(suggestion.amount)}',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: suggestion.amount <= 0 ? Colors.white : AppTheme.accent,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            suggestion.reason,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.secondaryText,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Text(
+              'Страховой резерв: ${SomFormatter.amount(suggestion.safetyReserve)}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AnalysisSummary {
   const _AnalysisSummary({
     required this.income,
@@ -743,13 +1113,30 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
   final TextEditingController _amountController = TextEditingController();
 
   int? _accountId;
-  int _daysOffset = 7;
+  late DateTime _selectedDate;
+
+  int get _daysOffset {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _selectedDate.difference(today).inDays;
+  }
+
+  set _daysOffset(int value) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    _selectedDate = today.add(Duration(days: value));
+  }
 
   @override
   void initState() {
     super.initState();
     _accountId = widget.accounts.first.id;
-    _daysOffset = widget.initialOffsetDays;
+    final today = DateTime.now();
+    _selectedDate = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).add(Duration(days: widget.initialOffsetDays));
   }
 
   @override
@@ -772,9 +1159,40 @@ class _CreateLoanSheetState extends State<_CreateLoanSheet> {
         accountId: accountId,
         title: title,
         amount: amount,
-        dueDate: DateTime.now().add(Duration(days: _daysOffset)),
+        dueDate: _selectedDate,
       ),
     );
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year, now.month, now.day);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate.isBefore(firstDate) ? firstDate : _selectedDate,
+      firstDate: firstDate,
+      lastDate: DateTime(now.year + 10, 12, 31),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.accent,
+              surface: AppTheme.surface,
+            ),
+            dialogTheme: const DialogThemeData(backgroundColor: AppTheme.surface),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+    );
+
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedDate = pickedDate;
+    });
   }
 
   @override
