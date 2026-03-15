@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/screens/home_screen.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
+import 'package:hackathon_bank_mobile/widgets/bank_card_preview.dart';
 
 import '../test_support/fake_bank_api_service.dart';
 
@@ -36,5 +37,31 @@ void main() {
     expect(find.text('Последние операции'), findsOneWidget);
     expect(find.text('Продукты'), findsWidgets);
     expect(find.textContaining('Поступления за март'), findsOneWidget);
+  });
+  testWidgets('opens my bank screen from card preview and toggles deposit', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: HomeScreen(apiService: FakeBankApiService(), refreshSignal: 0),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(BankCardPreview));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Накопительный депозит'), findsOneWidget);
+    expect(find.text('Закрыть депозит'), findsOneWidget);
+
+    await tester.tap(find.text('Закрыть депозит'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Открыть депозит'), findsOneWidget);
   });
 }

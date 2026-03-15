@@ -4,6 +4,8 @@ export 'src/models/account_model.dart';
 export 'src/models/ai_analysis_model.dart';
 export 'src/models/ai_dashboard_model.dart';
 export 'src/models/scheduled_payment_model.dart';
+export 'src/models/save_suggestion_model.dart';
+export 'src/models/smart_category_model.dart';
 export 'src/models/subscription_model.dart';
 export 'src/models/transaction_model.dart';
 export 'src/screens/ai_dashboard_screen.dart';

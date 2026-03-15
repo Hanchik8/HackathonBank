@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/screens/ai_dashboard_screen.dart';
 import 'package:hackathon_bank_mobile/services/bank_api_dashboard_repository.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
+import 'package:m_bank_dashboard/src/widgets/transaction_capture_sheet.dart';
 
 import '../test_support/fake_bank_api_service.dart';
 
@@ -10,6 +11,10 @@ void main() {
   testWidgets('dashboard reloads ai analysis when time machine changes', (
     WidgetTester tester,
   ) async {
+    final now = DateTime.now();
+    final expectedHorizon = DateTime(now.year, now.month + 1, 0)
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
     final apiService = FakeBankApiService();
     final repository = BankApiDashboardRepository(apiService: apiService);
     var refreshCount = 0;
@@ -31,8 +36,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiDashboardScreen), findsOneWidget);
-    expect(apiService.dashboardRequests, <int>[10]);
-    expect(apiService.analyzeRequests, <int>[10]);
+    expect(apiService.dashboardRequests, <int>[expectedHorizon]);
+    expect(apiService.analyzeRequests, <int>[expectedHorizon]);
     expect(refreshCount, 0);
 
     await tester.scrollUntilVisible(
@@ -77,7 +82,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.tap(find.byIcon(Icons.add_alert_rounded));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).at(0), 'Страхование');
@@ -99,5 +104,70 @@ void main() {
     expect(apiService.lastScheduledPaymentDraft?['title'], 'Страхование');
     expect(apiService.dashboardRequests.length, greaterThan(1));
     expect(refreshCount, 1);
+  });
+
+  testWidgets('dashboard creates loan and refreshes data immediately', (
+    WidgetTester tester,
+  ) async {
+    final apiService = FakeBankApiService();
+    final repository = BankApiDashboardRepository(apiService: apiService);
+    var refreshCount = 0;
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: AiDashboardScreen(
+            repository: repository,
+            refreshSignal: 0,
+            onDataChanged: () => refreshCount += 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.account_balance_wallet_rounded));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'Bridge loan');
+    await tester.enterText(find.byType(TextField).at(1), '12500');
+
+    final createLoanButton = find.byType(ElevatedButton).last;
+    await tester.scrollUntilVisible(
+      createLoanButton,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(createLoanButton);
+    await tester.pumpAndSettle();
+
+    expect(apiService.createLoanCalls, 1);
+    expect(apiService.lastLoanDraft?['title'], 'Bridge loan');
+    expect(apiService.dashboardRequests.length, greaterThan(1));
+    expect(refreshCount, 1);
+  });
+
+  testWidgets('transaction sheet hides category picker when smart list disabled', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: TransactionCaptureSheet(
+            accounts: sampleAccounts(),
+            smartCategories: sampleSmartCategories(),
+            smartListEnabled: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String?>), findsNothing);
   });
 }

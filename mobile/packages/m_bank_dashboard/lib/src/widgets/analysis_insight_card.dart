@@ -18,6 +18,10 @@ class AnalysisInsightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displaySubtitle = subtitle == 'Счет сбережений'
+        ? 'Накопительный депозит'
+        : subtitle;
+
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 160, maxWidth: 220),
       child: Container(
@@ -47,7 +51,7 @@ class AnalysisInsightCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              subtitle,
+              displaySubtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.white70,
                 height: 1.35,

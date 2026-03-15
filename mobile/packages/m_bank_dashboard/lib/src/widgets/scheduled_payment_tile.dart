@@ -6,15 +6,24 @@ import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
 
 class ScheduledPaymentTile extends StatelessWidget {
-  const ScheduledPaymentTile({super.key, required this.payment});
+  const ScheduledPaymentTile({
+    super.key,
+    required this.payment,
+    required this.referenceDate,
+    this.onDelete,
+    this.isDeleting = false,
+  });
 
   final ScheduledPaymentModel payment;
+  final DateTime referenceDate;
+  final VoidCallback? onDelete;
+  final bool isDeleting;
 
   @override
   Widget build(BuildContext context) {
     final iconData = _iconFor(payment.iconKey);
     final accent = _colorFor(payment.iconKey);
-    final dueLabel = _dueLabel(payment.dueDate);
+    final dueLabel = _dueLabel(payment.dueDate, referenceDate);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -46,17 +55,33 @@ class ScheduledPaymentTile extends StatelessWidget {
                     Expanded(
                       child: Text(
                         payment.title,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     _StatusChip(status: payment.status),
+                    if (onDelete != null) ...<Widget>[
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: isDeleting ? null : onDelete,
+                        icon: isDeleting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.delete_outline_rounded),
+                        color: AppTheme.coral,
+                        tooltip: 'Удалить',
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${payment.counterparty} \u2022 ${_displayAccountName(payment.accountName)}',
+                  '${payment.counterparty} • ${_displayAccountName(payment.accountName)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.secondaryText,
                     fontWeight: FontWeight.w600,
@@ -67,7 +92,7 @@ class ScheduledPaymentTile extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        '${payment.category} \u2022 $dueLabel',
+                        '${payment.category} • $dueLabel',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,
@@ -90,15 +115,18 @@ class ScheduledPaymentTile extends StatelessWidget {
     );
   }
 
-  String _dueLabel(DateTime dueDate) {
-    final now = DateTime.now();
+  String _dueLabel(DateTime dueDate, DateTime currentDate) {
     final dueDateOnly = DateTime(dueDate.year, dueDate.month, dueDate.day);
-    final todayOnly = DateTime(now.year, now.month, now.day);
+    final todayOnly = DateTime(
+      currentDate.year,
+      currentDate.month,
+      currentDate.day,
+    );
     final days = dueDateOnly.difference(todayOnly).inDays;
     if (days <= 0) {
       return 'сегодня';
     }
-    return 'через $days дн. \u2022 ${AppDateFormatter.shortDate(dueDate)}';
+    return 'через $days дн. • ${AppDateFormatter.shortDate(dueDate)}';
   }
 
   IconData _iconFor(String iconKey) {
@@ -128,7 +156,7 @@ class ScheduledPaymentTile extends StatelessWidget {
   String _displayAccountName(String name) {
     return switch (name) {
       'Main' => 'Основной счет',
-      'Savings' => 'Сбережения',
+      'Savings' => 'Накопительный депозит',
       _ => name,
     };
   }
