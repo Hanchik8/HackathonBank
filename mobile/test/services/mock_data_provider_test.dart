@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hackathon_bank_mobile/models/account_model.dart';
+import 'package:hackathon_bank_mobile/models/scheduled_payment_model.dart';
+import 'package:hackathon_bank_mobile/models/transaction_model.dart';
 import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
 
 import '../test_support/fake_bank_api_service.dart';
@@ -99,5 +102,135 @@ void main() {
 
     expect(MockDataProvider.smartListEnabled, isFalse);
     expect(after.amount, greaterThanOrEqualTo(before.amount));
+  });
+
+  test('computeBalanceAdvice avoids duplicate postpone suggestions', () {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: sampleScheduledPayments(),
+    );
+
+    final analysis = MockDataProvider.computeBalanceAdvice(horizonDays: 10);
+    final postponeSuggestions = analysis.suggestions
+        .where((suggestion) => suggestion.actionToken.startsWith('POSTPONE'))
+        .toList(growable: false);
+
+    expect(postponeSuggestions, hasLength(1));
+  });
+
+  test('computeBalanceAdvice uses recurring income date for postpone target', () async {
+    MockDataProvider.initDemoData(
+      accounts: const <AccountModel>[
+        AccountModel(
+          id: 1,
+          name: 'Main',
+          type: 'MAIN',
+          balance: 15000,
+          currency: 'KGS',
+        ),
+        AccountModel(
+          id: 2,
+          name: 'Savings',
+          type: 'SAVINGS',
+          balance: 0,
+          currency: 'KGS',
+        ),
+      ],
+      transactions: <TransactionModel>[
+        TransactionModel(
+          id: 1,
+          title: 'Зарплата',
+          counterparty: 'Tech Corp',
+          amount: 25000,
+          category: 'Поступления',
+          iconKey: 'income',
+          type: 'INCOME',
+          status: 'COMPLETED',
+          accountName: 'Main',
+          occurredAt: DateTime(2026, 1, 5, 10),
+        ),
+        TransactionModel(
+          id: 2,
+          title: 'Зарплата',
+          counterparty: 'Tech Corp',
+          amount: 25000,
+          category: 'Поступления',
+          iconKey: 'income',
+          type: 'INCOME',
+          status: 'COMPLETED',
+          accountName: 'Main',
+          occurredAt: DateTime(2026, 2, 5, 10),
+        ),
+        TransactionModel(
+          id: 3,
+          title: 'Зарплата',
+          counterparty: 'Tech Corp',
+          amount: 25000,
+          category: 'Поступления',
+          iconKey: 'income',
+          type: 'INCOME',
+          status: 'COMPLETED',
+          accountName: 'Main',
+          occurredAt: DateTime(2026, 3, 5, 10),
+        ),
+      ],
+      scheduledPayments: <ScheduledPaymentModel>[
+        ScheduledPaymentModel(
+          id: 77,
+          accountId: 1,
+          accountName: 'Main',
+          title: 'Подписка',
+          counterparty: 'Service',
+          category: 'Подписки',
+          iconKey: 'subscription',
+          amount: 20000,
+          dueDate: DateTime(2026, 3, 18),
+          status: 'SCHEDULED',
+          isReminder: true,
+        ),
+      ],
+    );
+    await MockDataProvider.setEffectiveDate(DateTime(2026, 3, 15));
+
+    final analysis = MockDataProvider.computeBalanceAdvice(horizonDays: 16);
+    final postponeSuggestion = analysis.suggestions.firstWhere(
+      (suggestion) => suggestion.actionToken.startsWith('POSTPONE:'),
+    );
+
+    expect(postponeSuggestion.actionToken, contains('2026-04-05'));
+  });
+
+  test('deleteScheduledPayment removes planned payment from mock state', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: sampleScheduledPayments(),
+    );
+
+    await MockDataProvider.deleteScheduledPayment(10);
+
+    expect(
+      MockDataProvider.scheduledPayments.any((payment) => payment.id == 10),
+      isFalse,
+    );
+  });
+
+  test('admin adjustment uses effective date for created transaction', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: const <ScheduledPaymentModel>[],
+    );
+    await MockDataProvider.setEffectiveDate(DateTime(2026, 3, 15));
+
+    final transaction = await MockDataProvider.adjustAccountBalance(
+      accountId: 1,
+      delta: 12000,
+      title: 'Премия',
+    );
+
+    expect(transaction.amount, 12000);
+    expect(transaction.occurredAt, DateTime(2026, 3, 15, 12));
   });
 }

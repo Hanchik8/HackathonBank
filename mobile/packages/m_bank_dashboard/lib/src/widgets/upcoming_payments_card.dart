@@ -8,13 +8,19 @@ class UpcomingPaymentsCard extends StatelessWidget {
   const UpcomingPaymentsCard({
     super.key,
     required this.payments,
+    required this.referenceDate,
     required this.isCreatingPayment,
     required this.onCreate,
+    required this.onDelete,
+    this.deletingPaymentId,
   });
 
   final List<ScheduledPaymentModel> payments;
+  final DateTime referenceDate;
   final bool isCreatingPayment;
   final VoidCallback onCreate;
+  final ValueChanged<int> onDelete;
+  final int? deletingPaymentId;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +98,12 @@ class UpcomingPaymentsCard extends StatelessWidget {
                   .map(
                     (payment) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: ScheduledPaymentTile(payment: payment),
+                      child: ScheduledPaymentTile(
+                        payment: payment,
+                        referenceDate: referenceDate,
+                        onDelete: () => onDelete(payment.id),
+                        isDeleting: deletingPaymentId == payment.id,
+                      ),
                     ),
                   )
                   .toList(),

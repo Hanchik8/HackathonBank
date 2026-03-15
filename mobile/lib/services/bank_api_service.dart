@@ -63,7 +63,7 @@ class BankApiService {
   Future<AiDashboardModel> fetchDashboard(int offsetDays) async {
     if (kDebugMode) {
       await _ensureMockDataInitialized();
-      return MockDataProvider.computeDashboard(_daysUntilEndOfMonth());
+      return MockDataProvider.computeDashboard(offsetDays);
     }
 
     final json =
@@ -73,6 +73,13 @@ class BankApiService {
   }
 
   Future<AiAnalysisModel> analyzeCashFlow(int offsetDays) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      return MockDataProvider.computeBalanceAdvice(
+        horizonDays: MockDataProvider.daysUntilEndOfMonth(),
+      );
+    }
+
     final json =
         await _apiClient.postJson(
               '/ai/analyze',
@@ -83,6 +90,11 @@ class BankApiService {
   }
 
   Future<AiExecutionModel> executeAction(String actionToken) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      return MockDataProvider.executeAction(actionToken);
+    }
+
     final json =
         await _apiClient.postJson(
               '/ai/execute',
@@ -90,6 +102,19 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return AiExecutionModel.fromJson(json);
+  }
+
+  Future<void> deleteScheduledPayment(int paymentId) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      await MockDataProvider.deleteScheduledPayment(paymentId);
+      return;
+    }
+
+    await _apiClient.postJson(
+      '/scheduled-payments/$paymentId/delete',
+      body: <String, dynamic>{},
+    );
   }
 
   Future<ScheduledPaymentModel> createScheduledPayment({
@@ -304,10 +329,99 @@ class BankApiService {
     );
   }
 
+  Future<bool> getAdminModeEnabled() async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      return MockDataProvider.adminModeEnabled;
+    }
+
+    try {
+      final json =
+          await _apiClient.getJson('/demo/admin-mode') as Map<String, dynamic>;
+      return json['enabled'] as bool? ?? false;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 || error.statusCode == 405) {
+        return false;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> setAdminModeEnabled(bool enabled) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      await MockDataProvider.setAdminModeEnabled(enabled);
+      return;
+    }
+
+    await _apiClient.postJson(
+      '/demo/admin-mode',
+      body: <String, dynamic>{'enabled': enabled},
+    );
+  }
+
+  Future<DateTime> getEffectiveDate() async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      return MockDataProvider.effectiveDate;
+    }
+
+    try {
+      final json = await _apiClient.getJson('/demo/date') as Map<String, dynamic>;
+      return DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now();
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 || error.statusCode == 405) {
+        return DateTime.now();
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> setEffectiveDate(DateTime date) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      await MockDataProvider.setEffectiveDate(date);
+      return;
+    }
+
+    await _apiClient.postJson(
+      '/demo/date',
+      body: <String, dynamic>{
+        'date': date.toIso8601String().split('T').first,
+      },
+    );
+  }
+
+  Future<TransactionModel> adjustAccountBalance({
+    required int accountId,
+    required double delta,
+    required String title,
+  }) async {
+    if (kDebugMode) {
+      await _ensureMockDataInitialized();
+      return MockDataProvider.adjustAccountBalance(
+        accountId: accountId,
+        delta: delta,
+        title: title,
+      );
+    }
+
+    final json =
+        await _apiClient.postJson(
+              '/demo/accounts/$accountId/adjust',
+              body: <String, dynamic>{
+                'delta': delta,
+                'title': title,
+              },
+            )
+            as Map<String, dynamic>;
+    return TransactionModel.fromJson(json);
+  }
+
   Future<SaveSuggestionModel> suggestEndOfMonthSave() async {
     if (kDebugMode) {
       await _ensureMockDataInitialized();
-      return _computeDebugSaveSuggestion();
+      return MockDataProvider.computeSuggestedSave();
     }
 
     final json =
@@ -411,6 +525,7 @@ class BankApiService {
         .toList(growable: false);
   }
 
+  // ignore: unused_element
   SaveSuggestionModel _computeDebugSaveSuggestion() {
     final trackedAccount = MockDataProvider.accounts.firstWhere(
       (account) => account.type == 'MAIN',

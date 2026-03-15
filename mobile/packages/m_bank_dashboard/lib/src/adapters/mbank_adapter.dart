@@ -152,6 +152,12 @@ class MbankAdapter implements DashboardRepository {
   }
 
   @override
+  Future<void> deleteScheduledPayment(int paymentId) {
+    // TODO: Confirm the real MBank scheduled-payment deletion endpoint.
+    return _client.deleteScheduledPayment(paymentId);
+  }
+
+  @override
   Future<TransactionModel> createTransaction({
     required int accountId,
     required String title,
@@ -209,6 +215,45 @@ class MbankAdapter implements DashboardRepository {
   Future<void> setSmartListEnabled(bool enabled) {
     // TODO: Confirm the real MBank Smart List toggle endpoint.
     return _client.setSmartListEnabled(enabled);
+  }
+
+  @override
+  Future<bool> getAdminModeEnabled() {
+    // TODO: Confirm whether MBank exposes a demo/admin mode flag.
+    return _client.getAdminModeEnabled();
+  }
+
+  @override
+  Future<void> setAdminModeEnabled(bool enabled) {
+    // TODO: Confirm the real MBank admin-mode toggle endpoint.
+    return _client.setAdminModeEnabled(enabled);
+  }
+
+  @override
+  Future<DateTime> getEffectiveDate() {
+    // TODO: Confirm how MBank exposes the effective demo date.
+    return _client.getEffectiveDate();
+  }
+
+  @override
+  Future<void> setEffectiveDate(DateTime date) {
+    // TODO: Confirm the real MBank endpoint for changing the effective date.
+    return _client.setEffectiveDate(date);
+  }
+
+  @override
+  Future<TransactionModel> adjustAccountBalance({
+    required int accountId,
+    required double delta,
+    required String title,
+  }) async {
+    // TODO: Confirm the real MBank admin-adjustment payload and response DTO.
+    final created = await _client.adjustAccountBalance(
+      accountId: accountId,
+      delta: delta,
+      title: title,
+    );
+    return _mapTransaction(created);
   }
 
   @override
@@ -355,6 +400,8 @@ abstract class ExistingMbankClient {
     required bool isReminder,
   });
 
+  Future<void> deleteScheduledPayment(int paymentId);
+
   Future<void> createLoan({
     required int accountId,
     required String title,
@@ -385,6 +432,20 @@ abstract class ExistingMbankClient {
   Future<bool> getSmartListEnabled();
 
   Future<void> setSmartListEnabled(bool enabled);
+
+  Future<bool> getAdminModeEnabled();
+
+  Future<void> setAdminModeEnabled(bool enabled);
+
+  Future<DateTime> getEffectiveDate();
+
+  Future<void> setEffectiveDate(DateTime date);
+
+  Future<ExistingMbankTransaction> adjustAccountBalance({
+    required int accountId,
+    required double delta,
+    required String title,
+  });
 
   Future<ExistingMbankSaveSuggestion> suggestEndOfMonthSave();
 }

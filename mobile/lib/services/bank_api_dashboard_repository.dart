@@ -66,6 +66,10 @@ class BankApiDashboardRepository implements DashboardRepository {
   );
 
   @override
+  Future<void> deleteScheduledPayment(int paymentId) =>
+      _apiService.deleteScheduledPayment(paymentId);
+
+  @override
   Future<void> createLoan({
     required int accountId,
     required String title,
@@ -122,6 +126,31 @@ class BankApiDashboardRepository implements DashboardRepository {
   @override
   Future<void> setSmartListEnabled(bool enabled) =>
       _apiService.setSmartListEnabled(enabled);
+
+  @override
+  Future<bool> getAdminModeEnabled() => _apiService.getAdminModeEnabled();
+
+  @override
+  Future<void> setAdminModeEnabled(bool enabled) =>
+      _apiService.setAdminModeEnabled(enabled);
+
+  @override
+  Future<DateTime> getEffectiveDate() => _apiService.getEffectiveDate();
+
+  @override
+  Future<void> setEffectiveDate(DateTime date) =>
+      _apiService.setEffectiveDate(date);
+
+  @override
+  Future<TransactionModel> adjustAccountBalance({
+    required int accountId,
+    required double delta,
+    required String title,
+  }) => _apiService.adjustAccountBalance(
+    accountId: accountId,
+    delta: delta,
+    title: title,
+  );
 
   @override
   Future<SaveSuggestionModel> suggestEndOfMonthSave() =>

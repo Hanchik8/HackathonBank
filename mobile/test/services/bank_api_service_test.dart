@@ -5,6 +5,8 @@ import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../test_support/fake_bank_api_service.dart';
+
 class _FakeApiClient extends ApiClient {
   _FakeApiClient(this.getResponses, this.postResponses)
     : super(
@@ -89,17 +91,6 @@ void main() {
         },
       },
       <String, dynamic>{
-        '/ai/analyze': <String, dynamic>{
-          'hasAlert': true,
-          'message': 'Move money from savings',
-          'actionToken': 'token-1',
-        },
-        '/ai/execute': <String, dynamic>{
-          'success': true,
-          'message': 'Done',
-          'currentBalance': 25000,
-          'savingsBalance': 40000,
-        },
         '/scheduled-payments': <String, dynamic>{
           'id': 10,
           'accountId': 1,
@@ -152,8 +143,6 @@ void main() {
     final transactions = await apiService.fetchTransactions();
     final subscriptions = await apiService.fetchSubscriptions();
     final dashboard = await apiService.fetchDashboard(7);
-    final analysis = await apiService.analyzeCashFlow(7);
-    final execution = await apiService.executeAction('token-1');
     final createdPayment = await apiService.createScheduledPayment(
       accountId: 1,
       title: 'Internet',
@@ -179,20 +168,88 @@ void main() {
     expect(transactions.single.category, 'Food');
     expect(subscriptions.single.title, 'MPlus');
     expect(subscriptions.single.currency, 'KGS');
-    expect(dashboard.horizonDays, expectedHorizon);
-    expect(analysis.actionToken, 'token-1');
-    expect(execution.currentBalance, 25000);
+    expect(dashboard.horizonDays, 7);
     expect(createdPayment.title, 'Internet');
     expect(createdPayment.isReminder, isTrue);
     expect(internalTransfer.toAccount?.name, 'Savings');
     expect(externalTransfer.recipientName, 'Aigerim');
-    expect(fakeApiClient.postBodies['/ai/analyze'], <String, dynamic>{
-      'offsetDays': 7,
-    });
     expect(
       fakeApiClient.postBodies['/subscriptions/sub-1/cancel'],
       <String, dynamic>{},
     );
+  });
+
+  test('debug analyzeCashFlow produces actionable balance suggestions', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: sampleScheduledPayments(),
+    );
+    final apiService = BankApiService(
+      apiClient: _FakeApiClient(<String, dynamic>{}, <String, dynamic>{}),
+    );
+
+    final analysis = await apiService.analyzeCashFlow(5);
+
+    expect(analysis.hasAlert, isTrue);
+    expect(analysis.suggestions, isNotEmpty);
+    expect(
+      analysis.suggestions.any(
+        (suggestion) => suggestion.actionToken.startsWith('CLOSE_DEPOSIT:'),
+      ),
+      isTrue,
+    );
+    expect(
+      analysis.suggestions.any(
+        (suggestion) =>
+            suggestion.actionToken.startsWith('POSTPONE:') ||
+            suggestion.actionToken.startsWith('POSTPONE_GROUP:'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('debug executeAction postpones payment and closes deposit', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: sampleScheduledPayments(),
+    );
+    final apiService = BankApiService(
+      apiClient: _FakeApiClient(<String, dynamic>{}, <String, dynamic>{}),
+    );
+    final originalPayment = MockDataProvider.scheduledPayments.firstWhere(
+      (payment) => payment.id == 10,
+    );
+
+    final postponeExecution = await apiService.executeAction('POSTPONE:10:7');
+    final postponedPayment = MockDataProvider.scheduledPayments.firstWhere(
+      (payment) => payment.id == 10,
+    );
+    final depositExecution = await apiService.executeAction('CLOSE_DEPOSIT:2');
+    final mainAccount = MockDataProvider.accounts.firstWhere(
+      (account) => account.type == 'MAIN',
+    );
+    final savingsAccount = MockDataProvider.accounts.firstWhere(
+      (account) => account.type == 'SAVINGS',
+    );
+
+    expect(postponeExecution.success, isTrue);
+    expect(
+      DateTime(
+        postponedPayment.dueDate.year,
+        postponedPayment.dueDate.month,
+        postponedPayment.dueDate.day,
+      ),
+      DateTime(
+        originalPayment.dueDate.year,
+        originalPayment.dueDate.month,
+        originalPayment.dueDate.day,
+      ).add(const Duration(days: 7)),
+    );
+    expect(depositExecution.success, isTrue);
+    expect(mainAccount.balance, 65000);
+    expect(savingsAccount.balance, 0);
   });
 
   test('returns an empty list when subscriptions endpoint is absent', () async {

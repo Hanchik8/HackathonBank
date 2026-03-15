@@ -37,6 +37,8 @@ abstract class DashboardRepository {
     required bool isReminder,
   });
 
+  Future<void> deleteScheduledPayment(int paymentId);
+
   Future<void> createLoan({
     required int accountId,
     required String title,
@@ -67,6 +69,20 @@ abstract class DashboardRepository {
   Future<bool> getSmartListEnabled();
 
   Future<void> setSmartListEnabled(bool enabled);
+
+  Future<bool> getAdminModeEnabled();
+
+  Future<void> setAdminModeEnabled(bool enabled);
+
+  Future<DateTime> getEffectiveDate();
+
+  Future<void> setEffectiveDate(DateTime date);
+
+  Future<TransactionModel> adjustAccountBalance({
+    required int accountId,
+    required double delta,
+    required String title,
+  });
 
   Future<SaveSuggestionModel> suggestEndOfMonthSave();
 
