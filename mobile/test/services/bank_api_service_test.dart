@@ -1,11 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/services/api_client.dart';
 import 'package:hackathon_bank_mobile/services/bank_api_service.dart';
-import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-
-import '../test_support/fake_bank_api_service.dart';
 
 class _FakeApiClient extends ApiClient {
   _FakeApiClient(this.getResponses, this.postResponses)
@@ -30,15 +27,7 @@ class _FakeApiClient extends ApiClient {
 }
 
 void main() {
-  setUp(() {
-    MockDataProvider.resetForTest();
-  });
-
   test('maps backend payloads into typed models', () async {
-    final now = DateTime.now();
-    final expectedHorizon = DateTime(now.year, now.month + 1, 0)
-        .difference(DateTime(now.year, now.month, now.day))
-        .inDays;
     final fakeApiClient = _FakeApiClient(
       <String, dynamic>{
         '/accounts': <Map<String, dynamic>>[
@@ -74,11 +63,11 @@ void main() {
             'nextChargeDate': '2026-03-20T00:00:00Z',
           },
         ],
-        '/ai/dashboard?offsetDays=$expectedHorizon': <String, dynamic>{
+        '/ai/dashboard?offsetDays=7': <String, dynamic>{
           'currentBalance': 15000,
           'savingsBalance': 50000,
           'minimumProjectedBalance': -10000,
-          'horizonDays': expectedHorizon,
+          'horizonDays': 7,
           'points': <Map<String, dynamic>>[
             <String, dynamic>{
               'dayOffset': 0,
@@ -102,6 +91,7 @@ void main() {
           'amount': 3900,
           'dueDate': '2026-03-18',
           'status': 'SCHEDULED',
+          'isReminder': true,
         },
         '/transfer': <String, dynamic>{
           'message': 'Internal transfer completed.',
@@ -161,6 +151,9 @@ void main() {
       recipientType: 'USER',
       recipientName: 'Aigerim',
       amount: 3000,
+      category: 'Переводы',
+      iconKey: 'transfer',
+      smartCategoryId: 'smart-transfer',
     );
     await apiService.cancelSubscription('sub-1');
 
@@ -177,85 +170,78 @@ void main() {
       fakeApiClient.postBodies['/subscriptions/sub-1/cancel'],
       <String, dynamic>{},
     );
+    expect(
+      fakeApiClient.postBodies['/transfer/external'],
+      <String, dynamic>{
+        'fromAccountId': 1,
+        'recipientType': 'USER',
+        'recipientName': 'Aigerim',
+        'amount': 3000.0,
+        'description': null,
+        'category': 'Переводы',
+        'iconKey': 'transfer',
+        'smartCategoryId': 'smart-transfer',
+      },
+    );
   });
 
-  test('debug analyzeCashFlow produces actionable balance suggestions', () async {
-    MockDataProvider.initDemoData(
-      accounts: sampleAccounts(),
-      transactions: sampleTransactions(),
-      scheduledPayments: sampleScheduledPayments(),
+  test('analyzeCashFlow posts offsetDays and parses suggestions', () async {
+    final fakeApiClient = _FakeApiClient(
+      <String, dynamic>{},
+      <String, dynamic>{
+        '/ai/analyze': <String, dynamic>{
+          'hasAlert': true,
+          'message': 'К концу месяца ожидается дефицит.',
+          'actionToken': 'CLOSE_DEPOSIT:2',
+          'suggestions': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'close-deposit-2',
+              'title': 'Закрыть депозит',
+              'description': 'Перевести деньги с депозита.',
+              'actionToken': 'CLOSE_DEPOSIT:2',
+            },
+          ],
+        },
+      },
     );
-    final apiService = BankApiService(
-      apiClient: _FakeApiClient(<String, dynamic>{}, <String, dynamic>{}),
-    );
+    final apiService = BankApiService(apiClient: fakeApiClient);
 
-    final analysis = await apiService.analyzeCashFlow(5);
+    final analysis = await apiService.analyzeCashFlow(19);
 
     expect(analysis.hasAlert, isTrue);
-    expect(analysis.suggestions, isNotEmpty);
+    expect(analysis.suggestions.single.title, 'Закрыть депозит');
     expect(
-      analysis.suggestions.any(
-        (suggestion) => suggestion.actionToken.startsWith('CLOSE_DEPOSIT:'),
-      ),
-      isTrue,
-    );
-    expect(
-      analysis.suggestions.any(
-        (suggestion) =>
-            suggestion.actionToken.startsWith('POSTPONE:') ||
-            suggestion.actionToken.startsWith('POSTPONE_GROUP:'),
-      ),
-      isTrue,
+      fakeApiClient.postBodies['/ai/analyze'],
+      <String, dynamic>{'offsetDays': 19},
     );
   });
 
-  test('debug executeAction postpones payment and closes deposit', () async {
-    MockDataProvider.initDemoData(
-      accounts: sampleAccounts(),
-      transactions: sampleTransactions(),
-      scheduledPayments: sampleScheduledPayments(),
+  test('executeAction posts token and maps response', () async {
+    final fakeApiClient = _FakeApiClient(
+      <String, dynamic>{},
+      <String, dynamic>{
+        '/ai/execute': <String, dynamic>{
+          'success': true,
+          'message': 'Депозит закрыт.',
+          'currentBalance': 65000,
+          'savingsBalance': 0,
+        },
+      },
     );
-    final apiService = BankApiService(
-      apiClient: _FakeApiClient(<String, dynamic>{}, <String, dynamic>{}),
-    );
-    final originalPayment = MockDataProvider.scheduledPayments.firstWhere(
-      (payment) => payment.id == 10,
-    );
+    final apiService = BankApiService(apiClient: fakeApiClient);
 
-    final postponeExecution = await apiService.executeAction('POSTPONE:10:7');
-    final postponedPayment = MockDataProvider.scheduledPayments.firstWhere(
-      (payment) => payment.id == 10,
-    );
-    final depositExecution = await apiService.executeAction('CLOSE_DEPOSIT:2');
-    final mainAccount = MockDataProvider.accounts.firstWhere(
-      (account) => account.type == 'MAIN',
-    );
-    final savingsAccount = MockDataProvider.accounts.firstWhere(
-      (account) => account.type == 'SAVINGS',
-    );
+    final execution = await apiService.executeAction('CLOSE_DEPOSIT:2');
 
-    expect(postponeExecution.success, isTrue);
+    expect(execution.success, isTrue);
+    expect(execution.currentBalance, 65000);
     expect(
-      DateTime(
-        postponedPayment.dueDate.year,
-        postponedPayment.dueDate.month,
-        postponedPayment.dueDate.day,
-      ),
-      DateTime(
-        originalPayment.dueDate.year,
-        originalPayment.dueDate.month,
-        originalPayment.dueDate.day,
-      ).add(const Duration(days: 7)),
+      fakeApiClient.postBodies['/ai/execute'],
+      <String, dynamic>{'actionToken': 'CLOSE_DEPOSIT:2'},
     );
-    expect(depositExecution.success, isTrue);
-    expect(mainAccount.balance, 65000);
-    expect(savingsAccount.balance, 0);
   });
 
   test('returns an empty list when subscriptions endpoint is absent', () async {
-    final apiService = BankApiService(
-      apiClient: _Subscriptions404ApiClient(),
-    );
+    final apiService = BankApiService(apiClient: _Subscriptions404ApiClient());
 
     final subscriptions = await apiService.fetchSubscriptions();
 

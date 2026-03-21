@@ -16,7 +16,11 @@ void main() {
       MaterialApp(
         theme: AppTheme.darkTheme,
         home: Scaffold(
-          body: HomeScreen(apiService: FakeBankApiService(), refreshSignal: 0),
+          body: HomeScreen(
+            apiService: FakeBankApiService(),
+            refreshSignal: 0,
+            onDataChanged: () {},
+          ),
         ),
       ),
     );
@@ -38,16 +42,24 @@ void main() {
     expect(find.text('Продукты'), findsWidgets);
     expect(find.textContaining('Поступления за март'), findsOneWidget);
   });
-  testWidgets('opens my bank screen from card preview and toggles deposit', (
+
+  testWidgets('opens my bank screen from card preview and closes deposit', (
     WidgetTester tester,
   ) async {
+    final apiService = FakeBankApiService();
+    var dataChangedCalls = 0;
+
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.darkTheme,
         home: Scaffold(
-          body: HomeScreen(apiService: FakeBankApiService(), refreshSignal: 0),
+          body: HomeScreen(
+            apiService: apiService,
+            refreshSignal: 0,
+            onDataChanged: () => dataChangedCalls += 1,
+          ),
         ),
       ),
     );
@@ -57,11 +69,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Накопительный депозит'), findsOneWidget);
-    expect(find.text('Закрыть депозит'), findsOneWidget);
+    final closeDepositButton = find.widgetWithText(
+      ElevatedButton,
+      'Закрыть депозит',
+    );
+    await tester.ensureVisible(closeDepositButton);
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Закрыть депозит'));
+    await tester.tap(closeDepositButton, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(find.text('Открыть депозит'), findsOneWidget);
+    expect(apiService.lastActionToken, 'CLOSE_DEPOSIT:2');
+    expect(dataChangedCalls, 1);
   });
 }

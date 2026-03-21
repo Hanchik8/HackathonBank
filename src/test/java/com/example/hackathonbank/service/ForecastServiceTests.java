@@ -36,7 +36,7 @@ class ForecastServiceTests {
     }
 
     @Test
-    void buildDashboardLimitsHorizonAndTracksMinimumBalance() {
+    void buildDashboardUsesRequestedHorizonAndTracksMinimumBalance() {
         User user = new User("Azizkhan");
         Account main = new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS");
         Account savings = new Account(user, AccountType.SAVINGS, "Savings", new BigDecimal("50000.00"), "KGS");
@@ -56,8 +56,8 @@ class ForecastServiceTests {
 
         AiDashboardResponse dashboard = forecastService.buildDashboard(42);
 
-        assertThat(dashboard.horizonDays()).isEqualTo(10);
-        assertThat(dashboard.points()).hasSize(11);
+        assertThat(dashboard.horizonDays()).isEqualTo(42);
+        assertThat(dashboard.points()).hasSize(43);
         assertThat(dashboard.minimumProjectedBalance()).isEqualByComparingTo("-10000.00");
         assertThat(dashboard.scheduledPayments()).hasSize(1);
     }

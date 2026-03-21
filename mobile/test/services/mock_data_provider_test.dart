@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/scheduled_payment_model.dart';
 import 'package:hackathon_bank_mobile/models/transaction_model.dart';
+import 'package:hackathon_bank_mobile/services/api_client.dart';
 import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
 
 import '../test_support/fake_bank_api_service.dart';
@@ -102,6 +103,60 @@ void main() {
 
     expect(MockDataProvider.smartListEnabled, isFalse);
     expect(after.amount, greaterThanOrEqualTo(before.amount));
+  });
+
+  test('setSmartCategoryFavorite persists favorite flag in smart list', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: const [],
+    );
+
+    final created = await MockDataProvider.createSmartCategory(
+      name: 'Транспорт',
+      plannedMonthly: 6000,
+    );
+
+    await MockDataProvider.setSmartCategoryFavorite(created.id, true);
+
+    final updated = MockDataProvider.smartCategories.firstWhere(
+      (category) => category.id == created.id,
+    );
+    expect(updated.isFavorite, isTrue);
+  });
+
+  test('setSmartCategoryFavorite rejects more than three favorites', () async {
+    MockDataProvider.initDemoData(
+      accounts: sampleAccounts(),
+      transactions: sampleTransactions(),
+      scheduledPayments: const [],
+    );
+
+    final first = await MockDataProvider.createSmartCategory(
+      name: 'Транспорт',
+      plannedMonthly: 6000,
+    );
+    final second = await MockDataProvider.createSmartCategory(
+      name: 'Дом',
+      plannedMonthly: 8000,
+    );
+    final third = await MockDataProvider.createSmartCategory(
+      name: 'Маркет',
+      plannedMonthly: 4000,
+    );
+    final fourth = await MockDataProvider.createSmartCategory(
+      name: 'Подарки',
+      plannedMonthly: 5000,
+    );
+
+    await MockDataProvider.setSmartCategoryFavorite(first.id, true);
+    await MockDataProvider.setSmartCategoryFavorite(second.id, true);
+    await MockDataProvider.setSmartCategoryFavorite(third.id, true);
+
+    expect(
+      () => MockDataProvider.setSmartCategoryFavorite(fourth.id, true),
+      throwsA(isA<ApiException>()),
+    );
   });
 
   test('computeBalanceAdvice avoids duplicate postpone suggestions', () {
