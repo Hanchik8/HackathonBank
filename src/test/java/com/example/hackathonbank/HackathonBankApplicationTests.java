@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -113,11 +114,11 @@ class HackathonBankApplicationTests {
     }
 
     @Test
-    void dashboardEndpointClampsHorizonToTenDays() throws Exception {
+    void dashboardEndpointUsesRequestedHorizon() throws Exception {
         mockMvc.perform(get("/api/v1/ai/dashboard?offsetDays=99"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.horizonDays").value(10))
-                .andExpect(jsonPath("$.points.length()").value(11))
+                .andExpect(jsonPath("$.horizonDays").value(99))
+                .andExpect(jsonPath("$.points.length()").value(100))
                 .andExpect(jsonPath("$.scheduledPayments.length()").value(1));
     }
 
@@ -176,6 +177,20 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.hasAlert").value(true))
                 .andExpect(jsonPath("$.message", not(containsString("KZT"))))
                 .andExpect(jsonPath("$.actionToken").isNotEmpty());
+    }
+
+    @Test
+    void analyzeUsesFirstNegativeDateInsteadOfWindowEnd() throws Exception {
+        String expectedDate = shortDateLabel(LocalDate.now().plusDays(4));
+
+        mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":10}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.hasAlert").value(true))
+                .andExpect(jsonPath("$.message", containsString(expectedDate)));
     }
 
     @Test
@@ -242,8 +257,37 @@ class HackathonBankApplicationTests {
         var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
         var savingsAccount = accountRepository.findByUserIdAndType(1L, AccountType.SAVINGS).orElseThrow();
 
-        assertThat(mainAccount.getBalance()).isEqualByComparingTo("25000.00");
-        assertThat(savingsAccount.getBalance()).isEqualByComparingTo("40000.00");
+        assertThat(mainAccount.getBalance()).isEqualByComparingTo("65000.00");
+        assertThat(savingsAccount.getBalance()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void externalTransferRejectsSavingsAccountAsSource() throws Exception {
+        var savingsAccount = accountRepository.findByUserIdAndType(1L, AccountType.SAVINGS).orElseThrow();
+
+        mockMvc.perform(post("/api/v1/transfer/external")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ExternalTransferRequest(
+                                savingsAccount.getId(),
+                                TransferRecipientType.USER,
+                                "Aigerim",
+                                new BigDecimal("1000.00"),
+                                "Проверка"
+                        ))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("накопительного депозита")));
+    }
+
+    @Test
+    void saveSuggestionReturnsBreakdownFields() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/save-suggestion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").exists())
+                .andExpect(jsonPath("$.currentBalance").exists())
+                .andExpect(jsonPath("$.scheduledOutflow").exists())
+                .andExpect(jsonPath("$.smartListReserve").exists())
+                .andExpect(jsonPath("$.safetyReserve").exists())
+                .andExpect(jsonPath("$.freeAmount").exists());
     }
 
     @Test
@@ -255,5 +299,22 @@ class HackathonBankApplicationTests {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Токен действия недействителен или уже истек."));
+    }
+
+    private String shortDateLabel(LocalDate value) {
+        return "%d %s".formatted(value.getDayOfMonth(), switch (value.getMonthValue()) {
+            case 1 -> "янв.";
+            case 2 -> "фев.";
+            case 3 -> "мар.";
+            case 4 -> "апр.";
+            case 5 -> "мая";
+            case 6 -> "июн.";
+            case 7 -> "июл.";
+            case 8 -> "авг.";
+            case 9 -> "сент.";
+            case 10 -> "окт.";
+            case 11 -> "нояб.";
+            default -> "дек.";
+        });
     }
 }

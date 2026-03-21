@@ -4,6 +4,7 @@ import '../models/ai_dashboard_model.dart';
 import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
+import 'api_client.dart';
 
 class MockDataProvider {
   MockDataProvider._();
@@ -83,18 +84,21 @@ class MockDataProvider {
         name: 'Еда',
         plannedMonthly: 12000,
         remaining: 12000,
+        isFavorite: false,
       ),
       SmartCategory(
         id: 'transfer',
         name: 'Переводы',
         plannedMonthly: 9000,
         remaining: 9000,
+        isFavorite: false,
       ),
       SmartCategory(
         id: 'fun',
         name: 'Развлечения',
         plannedMonthly: 7000,
         remaining: 7000,
+        isFavorite: false,
       ),
     ];
     _transactionSmartCategoryIds = _inferSmartCategoryAssignments(_transactions);
@@ -213,12 +217,51 @@ class MockDataProvider {
       name: name,
       plannedMonthly: plannedMonthly,
       remaining: plannedMonthly,
+      isFavorite: false,
     );
     _smartCategoryDefinitions = <SmartCategory>[
       ..._smartCategoryDefinitions,
       category,
     ];
     return category;
+  }
+
+  static Future<void> setSmartCategoryFavorite(
+    String categoryId,
+    bool isFavorite,
+  ) async {
+    final currentCategory = _smartCategoryDefinitions
+        .where((category) => category.id == categoryId)
+        .firstOrNull;
+    if (currentCategory == null) {
+      throw const ApiException(404, 'Smart-категория не найдена.');
+    }
+
+    if (isFavorite && !currentCategory.isFavorite) {
+      final favoriteCount = _smartCategoryDefinitions
+          .where((category) => category.isFavorite)
+          .length;
+      if (favoriteCount >= 3) {
+        throw const ApiException(
+          400,
+          'Можно выбрать не больше трех избранных категорий.',
+        );
+      }
+    }
+
+    _smartCategoryDefinitions = _smartCategoryDefinitions
+        .map(
+          (category) => category.id == categoryId
+              ? SmartCategory(
+                  id: category.id,
+                  name: category.name,
+                  plannedMonthly: category.plannedMonthly,
+                  remaining: category.remaining,
+                  isFavorite: isFavorite,
+                )
+              : category,
+        )
+        .toList(growable: false);
   }
 
   static Future<void> deleteSmartCategory(String categoryId) async {
@@ -803,6 +846,7 @@ class MockDataProvider {
         name: definition.name,
         plannedMonthly: definition.plannedMonthly,
         remaining: definition.plannedMonthly - spent,
+        isFavorite: definition.isFavorite,
       );
     }).toList(growable: false);
   }

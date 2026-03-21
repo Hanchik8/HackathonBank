@@ -1,8 +1,12 @@
 package com.example.hackathonbank.controller;
 
+import com.example.hackathonbank.controller.dto.CreateTransactionRequest;
 import com.example.hackathonbank.controller.dto.TransactionResponse;
 import com.example.hackathonbank.service.TransactionService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,5 +25,10 @@ public class TransactionController {
     @GetMapping
     public List<TransactionResponse> getTransactions() {
         return transactionService.getTransactions();
+    }
+
+    @PostMapping
+    public TransactionResponse createTransaction(@Valid @RequestBody CreateTransactionRequest request) {
+        return transactionService.createTransaction(request);
     }
 }

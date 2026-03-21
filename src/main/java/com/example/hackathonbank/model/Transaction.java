@@ -37,6 +37,10 @@ public class Transaction {
     @JoinColumn(name = "scheduled_payment_id")
     private ScheduledPayment scheduledPayment;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "smart_category_id")
+    private SmartCategory smartCategory;
+
     @Column(nullable = false)
     private String title;
 
@@ -77,9 +81,25 @@ public class Transaction {
                        TransactionType type,
                        TransactionStatus status,
                        LocalDateTime occurredAt) {
+        this(user, account, scheduledPayment, null, title, counterparty, amount, category, iconKey, type, status, occurredAt);
+    }
+
+    public Transaction(User user,
+                       Account account,
+                       ScheduledPayment scheduledPayment,
+                       SmartCategory smartCategory,
+                       String title,
+                       String counterparty,
+                       BigDecimal amount,
+                       String category,
+                       String iconKey,
+                       TransactionType type,
+                       TransactionStatus status,
+                       LocalDateTime occurredAt) {
         this.user = user;
         this.account = account;
         this.scheduledPayment = scheduledPayment;
+        this.smartCategory = smartCategory;
         this.title = title;
         this.counterparty = counterparty;
         this.amount = amount;
@@ -104,6 +124,10 @@ public class Transaction {
 
     public ScheduledPayment getScheduledPayment() {
         return scheduledPayment;
+    }
+
+    public SmartCategory getSmartCategory() {
+        return smartCategory;
     }
 
     public String getTitle() {
@@ -136,6 +160,10 @@ public class Transaction {
 
     public LocalDateTime getOccurredAt() {
         return occurredAt;
+    }
+
+    public void setSmartCategory(SmartCategory smartCategory) {
+        this.smartCategory = smartCategory;
     }
 
     public void reschedule(LocalDate newDate) {

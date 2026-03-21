@@ -1,4 +1,11 @@
 package com.example.hackathonbank.ai.dto;
 
-public record AiAnalyzeResponse(boolean hasAlert, String message, String actionToken) {
+import java.util.List;
+
+public record AiAnalyzeResponse(
+        boolean hasAlert,
+        String message,
+        String actionToken,
+        List<BalanceSuggestionResponse> suggestions
+) {
 }

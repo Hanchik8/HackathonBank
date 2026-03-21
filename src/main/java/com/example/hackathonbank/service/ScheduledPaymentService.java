@@ -14,11 +14,14 @@ import com.example.hackathonbank.model.TransactionType;
 import com.example.hackathonbank.model.User;
 import com.example.hackathonbank.repository.ScheduledPaymentRepository;
 import com.example.hackathonbank.repository.TransactionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 @Service
 public class ScheduledPaymentService {
@@ -27,15 +30,26 @@ public class ScheduledPaymentService {
     private final TransactionRepository transactionRepository;
     private final UserContextService userContextService;
     private final AccountService accountService;
+    private final UserSettingsService userSettingsService;
+
+    @Autowired
+    public ScheduledPaymentService(ScheduledPaymentRepository scheduledPaymentRepository,
+                                   TransactionRepository transactionRepository,
+                                   UserContextService userContextService,
+                                   AccountService accountService,
+                                   UserSettingsService userSettingsService) {
+        this.scheduledPaymentRepository = scheduledPaymentRepository;
+        this.transactionRepository = transactionRepository;
+        this.userContextService = userContextService;
+        this.accountService = accountService;
+        this.userSettingsService = userSettingsService;
+    }
 
     public ScheduledPaymentService(ScheduledPaymentRepository scheduledPaymentRepository,
                                    TransactionRepository transactionRepository,
                                    UserContextService userContextService,
                                    AccountService accountService) {
-        this.scheduledPaymentRepository = scheduledPaymentRepository;
-        this.transactionRepository = transactionRepository;
-        this.userContextService = userContextService;
-        this.accountService = accountService;
+        this(scheduledPaymentRepository, transactionRepository, userContextService, accountService, null);
     }
 
     @Transactional(readOnly = true)
@@ -69,6 +83,7 @@ public class ScheduledPaymentService {
                 request.category().trim(),
                 iconKey,
                 request.dueDate(),
+                Boolean.TRUE.equals(request.isReminder()),
                 PaymentStatus.SCHEDULED
         ));
 
@@ -91,13 +106,15 @@ public class ScheduledPaymentService {
 
     @Transactional
     public ActionExecutionResult postponePayment(Long paymentId) {
-        ScheduledPayment payment = scheduledPaymentRepository.findById(paymentId)
-                .orElseThrow(() -> new IllegalArgumentException("Автоплатеж %d не найден.".formatted(paymentId)));
-        if (!payment.getUser().getId().equals(userContextService.getCurrentUser().getId())) {
-            throw new IllegalArgumentException("Автоплатеж недоступен текущему пользователю.");
-        }
+        ScheduledPayment payment = getOwnedPayment(paymentId);
+        return postponePaymentTo(paymentId, payment.getDueDate().plusDays(7));
+    }
 
-        payment.postponeByDays(7);
+    @Transactional
+    public ActionExecutionResult postponePaymentTo(Long paymentId, LocalDate targetDate) {
+        ScheduledPayment payment = getOwnedPayment(paymentId);
+        validateTargetDate(targetDate);
+        payment.postponeTo(targetDate);
         scheduledPaymentRepository.save(payment);
         transactionRepository.findByScheduledPaymentId(paymentId)
                 .ifPresent(transaction -> transaction.reschedule(payment.getDueDate()));
@@ -108,6 +125,37 @@ public class ScheduledPaymentService {
                 accountService.getAccountByType(AccountType.MAIN).getBalance(),
                 accountService.getAccountByType(AccountType.SAVINGS).getBalance()
         );
+    }
+
+    @Transactional
+    public ActionExecutionResult postponePaymentsTo(List<Long> paymentIds, LocalDate targetDate) {
+        validateTargetDate(targetDate);
+        List<ScheduledPayment> payments = paymentIds.stream()
+                .map(this::getOwnedPayment)
+                .toList();
+        if (payments.isEmpty()) {
+            throw new IllegalArgumentException("Не найдено ни одного платежа для переноса.");
+        }
+
+        payments.forEach(payment -> payment.postponeTo(targetDate));
+        scheduledPaymentRepository.saveAll(payments);
+        payments.forEach(payment -> transactionRepository.findByScheduledPaymentId(payment.getId())
+                .ifPresent(transaction -> transaction.reschedule(targetDate)));
+
+        return new ActionExecutionResult(
+                AgentActionType.POSTPONE_PAYMENT.name(),
+                "Перенесено %d платежей на %s.".formatted(payments.size(), targetDate),
+                accountService.getAccountByType(AccountType.MAIN).getBalance(),
+                accountService.getAccountByType(AccountType.SAVINGS).getBalance()
+        );
+    }
+
+    @Transactional
+    public void deleteScheduledPayment(Long paymentId) {
+        ScheduledPayment payment = getOwnedPayment(paymentId);
+        transactionRepository.findByScheduledPaymentId(paymentId)
+                .ifPresent(transactionRepository::delete);
+        scheduledPaymentRepository.delete(payment);
     }
 
     public ScheduledPaymentResponse toResponse(ScheduledPayment payment) {
@@ -121,8 +169,28 @@ public class ScheduledPaymentService {
                 payment.getIconKey(),
                 payment.getAmount(),
                 payment.getDueDate(),
-                payment.getStatus().name()
+                payment.getStatus().name(),
+                payment.isReminder()
         );
+    }
+
+    private ScheduledPayment getOwnedPayment(Long paymentId) {
+        ScheduledPayment payment = scheduledPaymentRepository.findById(paymentId)
+                .orElseThrow(() -> new IllegalArgumentException("Автоплатеж %d не найден.".formatted(paymentId)));
+        if (!Objects.equals(payment.getUser().getId(), userContextService.getCurrentUser().getId())) {
+            throw new IllegalArgumentException("Автоплатеж недоступен текущему пользователю.");
+        }
+        return payment;
+    }
+
+    private void validateTargetDate(LocalDate targetDate) {
+        if (!targetDate.isAfter(currentDate())) {
+            throw new IllegalArgumentException("Новая дата платежа должна быть позже текущей даты.");
+        }
+    }
+
+    private LocalDate currentDate() {
+        return userSettingsService == null ? LocalDate.now() : userSettingsService.currentDate();
     }
 
     private String normalizeCounterparty(String counterparty, String title) {

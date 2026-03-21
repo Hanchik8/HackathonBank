@@ -134,12 +134,14 @@ List<SmartCategory> sampleSmartCategories() {
       name: 'Еда',
       plannedMonthly: 12000,
       remaining: 8800,
+      isFavorite: true,
     ),
     SmartCategory(
       id: 'transfer',
       name: 'Переводы',
       plannedMonthly: 9000,
       remaining: 7500,
+      isFavorite: false,
     ),
   ];
 }
@@ -576,6 +578,7 @@ class FakeBankApiService extends BankApiService {
           name: current.name,
           plannedMonthly: current.plannedMonthly,
           remaining: current.remaining - amount,
+          isFavorite: current.isFavorite,
         );
       }
     }
@@ -619,9 +622,44 @@ class FakeBankApiService extends BankApiService {
       name: name,
       plannedMonthly: plannedMonthly,
       remaining: plannedMonthly,
+      isFavorite: false,
     );
     _smartCategories.add(category);
     return category;
+  }
+
+  @override
+  Future<void> setSmartCategoryFavorite(
+    String categoryId,
+    bool isFavorite,
+  ) async {
+    final currentIndex = _smartCategories.indexWhere(
+      (category) => category.id == categoryId,
+    );
+    if (currentIndex < 0) {
+      throw const ApiException(404, 'Smart-категория не найдена.');
+    }
+
+    if (isFavorite && !_smartCategories[currentIndex].isFavorite) {
+      final favoriteCount = _smartCategories
+          .where((category) => category.isFavorite)
+          .length;
+      if (favoriteCount >= 3) {
+        throw const ApiException(
+          400,
+          'Можно выбрать не больше трех избранных категорий.',
+        );
+      }
+    }
+
+    final current = _smartCategories[currentIndex];
+    _smartCategories[currentIndex] = SmartCategory(
+      id: current.id,
+      name: current.name,
+      plannedMonthly: current.plannedMonthly,
+      remaining: current.remaining,
+      isFavorite: isFavorite,
+    );
   }
 
   @override
@@ -638,7 +676,24 @@ class FakeBankApiService extends BankApiService {
       'amount': amount,
       'description': description,
     };
-    return _internalTransferResult;
+
+    final fromAccount = _findAccountById(fromAccountId);
+    final toAccount = _findAccountById(toAccountId);
+    if (fromAccount == null || toAccount == null) {
+      return _internalTransferResult;
+    }
+
+    _updateAccountBalance(fromAccountId, -amount);
+    _updateAccountBalance(toAccountId, amount);
+    return TransferResultModel(
+      message:
+          description?.isNotEmpty == true
+              ? description!
+              : 'Перевод между счетами выполнен.',
+      fromAccount: _findAccountById(fromAccountId) ?? fromAccount,
+      toAccount: _findAccountById(toAccountId) ?? toAccount,
+      amount: amount,
+    );
   }
 
   @override
@@ -648,6 +703,9 @@ class FakeBankApiService extends BankApiService {
     required String recipientName,
     required double amount,
     String? description,
+    String? category,
+    String? iconKey,
+    String? smartCategoryId,
   }) async {
     externalTransferCalls += 1;
     lastExternalTransfer = <String, Object?>{
@@ -656,6 +714,9 @@ class FakeBankApiService extends BankApiService {
       'recipientName': recipientName,
       'amount': amount,
       'description': description,
+      'category': category,
+      'iconKey': iconKey,
+      'smartCategoryId': smartCategoryId,
     };
     return _transferResult;
   }

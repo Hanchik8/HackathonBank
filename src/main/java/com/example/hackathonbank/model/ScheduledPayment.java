@@ -49,6 +49,9 @@ public class ScheduledPayment {
     @Column(nullable = false)
     private LocalDate dueDate;
 
+    @Column(nullable = false)
+    private boolean reminder;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PaymentStatus status;
@@ -63,7 +66,7 @@ public class ScheduledPayment {
                             String category,
                             LocalDate dueDate,
                             PaymentStatus status) {
-        this(user, account, title, title, amount, category, "calendar", dueDate, status);
+        this(user, account, title, title, amount, category, "calendar", dueDate, true, status);
     }
 
     public ScheduledPayment(User user,
@@ -74,6 +77,7 @@ public class ScheduledPayment {
                             String category,
                             String iconKey,
                             LocalDate dueDate,
+                            boolean reminder,
                             PaymentStatus status) {
         this.user = user;
         this.account = account;
@@ -83,6 +87,7 @@ public class ScheduledPayment {
         this.category = category;
         this.iconKey = iconKey;
         this.dueDate = dueDate;
+        this.reminder = reminder;
         this.status = status;
     }
 
@@ -122,12 +127,21 @@ public class ScheduledPayment {
         return dueDate;
     }
 
+    public boolean isReminder() {
+        return reminder;
+    }
+
     public PaymentStatus getStatus() {
         return status;
     }
 
     public void postponeByDays(long days) {
         this.dueDate = this.dueDate.plusDays(days);
+        this.status = PaymentStatus.POSTPONED;
+    }
+
+    public void postponeTo(LocalDate targetDate) {
+        this.dueDate = targetDate;
         this.status = PaymentStatus.POSTPONED;
     }
 }
