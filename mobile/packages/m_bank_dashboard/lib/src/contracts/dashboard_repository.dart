@@ -64,6 +64,8 @@ abstract class DashboardRepository {
     required double plannedMonthly,
   });
 
+  Future<void> setSmartCategoryFavorite(String categoryId, bool isFavorite);
+
   Future<void> deleteSmartCategory(String categoryId);
 
   Future<bool> getSmartListEnabled();

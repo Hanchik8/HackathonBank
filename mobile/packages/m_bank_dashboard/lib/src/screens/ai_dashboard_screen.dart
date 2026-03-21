@@ -63,6 +63,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   bool _smartListEnabled = true;
   bool _adminModeEnabled = false;
   String? _deletingCategoryId;
+  String? _updatingFavoriteCategoryId;
   int? _deletingPaymentId;
   DateTime _effectiveDate = _today();
   late int _offsetDays;
@@ -134,6 +135,77 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _errorMessage = error.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _refreshFinancialState() async {
+    final requestOffset = _offsetDays.clamp(0, _daysUntilEndOfMonth());
+
+    try {
+      final results = await Future.wait<dynamic>(<Future<dynamic>>[
+        widget.repository.fetchDashboard(requestOffset),
+        widget.repository.analyzeCashFlow(requestOffset),
+        widget.repository.fetchTransactions(),
+        widget.repository.fetchAccounts(),
+        widget.repository.suggestEndOfMonthSave(),
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _dashboard = results[0] as AiDashboardModel;
+        _analysis = results[1] as AiAnalysisModel;
+        _transactions = results[2] as List<TransactionModel>;
+        _accounts = results[3] as List<AccountModel>;
+        _saveSuggestion = results[4] as SaveSuggestionModel;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
+    }
+  }
+
+  Future<void> _refreshSmartListState({
+    bool includeSettings = false,
+    bool includeSaveSuggestion = true,
+  }) async {
+    try {
+      final futures = <Future<dynamic>>[
+        widget.repository.fetchSmartCategories(),
+        if (includeSaveSuggestion) widget.repository.suggestEndOfMonthSave(),
+        if (includeSettings) widget.repository.getSmartListEnabled(),
+      ];
+      final results = await Future.wait<dynamic>(futures);
+
+      if (!mounted) {
+        return;
+      }
+
+      var index = 0;
+      final categories = results[index++] as List<SmartCategory>;
+      final suggestion = includeSaveSuggestion
+          ? results[index++] as SaveSuggestionModel
+          : _saveSuggestion;
+      final smartListEnabled = includeSettings
+          ? results[index] as bool
+          : _smartListEnabled;
+
+      setState(() {
+        _smartCategories = categories;
+        if (includeSaveSuggestion && suggestion != null) {
+          _saveSuggestion = suggestion;
+        }
+        _smartListEnabled = smartListEnabled;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
     }
   }
 
@@ -224,7 +296,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
       widget.onDataChanged();
       _showMessage('Платеж "${created.title}" запланирован.');
-      await _loadData();
+      await _refreshFinancialState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -256,7 +328,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
       widget.onDataChanged();
       _showMessage('Отложенный платеж удален.');
-      await _loadData();
+      await _refreshFinancialState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -321,7 +393,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
       widget.onDataChanged();
       _showMessage('Кредит создан. Прогноз обновлен.');
-      await _loadData();
+      await _refreshFinancialState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -391,7 +463,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             ? 'Платеж сохранен.'
             : 'Платеж сохранен и учтен в Smart List.',
       );
-      await _loadData();
+      await _refreshFinancialState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -445,7 +517,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
       widget.onDataChanged();
       _showMessage('Категория "${draft.name}" добавлена.');
-      await _loadData();
+      await _refreshSmartListState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -477,7 +549,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
       widget.onDataChanged();
       _showMessage('Категория удалена.');
-      await _loadData();
+      await _refreshSmartListState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -487,6 +559,40 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       if (mounted) {
         setState(() {
           _deletingCategoryId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleFavoriteCategory(SmartCategory category) async {
+    if (_updatingFavoriteCategoryId != null) {
+      return;
+    }
+
+    setState(() {
+      _updatingFavoriteCategoryId = category.id;
+    });
+
+    try {
+      await widget.repository.setSmartCategoryFavorite(
+        category.id,
+        !category.isFavorite,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      widget.onDataChanged();
+      await _refreshSmartListState(includeSaveSuggestion: false);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingFavoriteCategoryId = null;
         });
       }
     }
@@ -508,7 +614,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
 
       widget.onDataChanged();
-      await _loadData();
+      await _refreshSmartListState(includeSettings: true);
     } catch (error) {
       if (!mounted) {
         return;
@@ -540,7 +646,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
 
       widget.onDataChanged();
-      await _loadData();
+      await _refreshFinancialState();
       if (nextValue) {
         await _openAdminModeSheet();
       }
@@ -625,7 +731,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       _offsetDays = _offsetDays.clamp(0, _daysUntilEndOfMonth());
       widget.onDataChanged();
       _showMessage('Админ-режим обновлен.');
-      await _loadData();
+      await _refreshFinancialState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -808,8 +914,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             SmartListCard(
               categories: smartCategories,
               onAddCategory: _openCreateSmartCategorySheet,
+              onToggleFavorite: _toggleFavoriteCategory,
               onDeleteCategory: _deleteSmartCategory,
               deletingCategoryId: _deletingCategoryId,
+              updatingFavoriteCategoryId: _updatingFavoriteCategoryId,
             )
           else
             Container(

@@ -35,16 +35,14 @@ class BankApiDashboardRepository implements DashboardRepository {
     required String category,
     required double amount,
     required DateTime dueDate,
-  }) {
-    return _apiService.createScheduledPayment(
-      accountId: accountId,
-      title: title,
-      counterparty: counterparty,
-      category: category,
-      amount: amount,
-      dueDate: dueDate,
-    );
-  }
+  }) => _apiService.createScheduledPayment(
+    accountId: accountId,
+    title: title,
+    counterparty: counterparty,
+    category: category,
+    amount: amount,
+    dueDate: dueDate,
+  );
 
   @override
   Future<ScheduledPaymentModel> createReminderScheduledPayment({
@@ -115,6 +113,10 @@ class BankApiDashboardRepository implements DashboardRepository {
     name: name,
     plannedMonthly: plannedMonthly,
   );
+
+  @override
+  Future<void> setSmartCategoryFavorite(String categoryId, bool isFavorite) =>
+      _apiService.setSmartCategoryFavorite(categoryId, isFavorite);
 
   @override
   Future<void> deleteSmartCategory(String categoryId) =>

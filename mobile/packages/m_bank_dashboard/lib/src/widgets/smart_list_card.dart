@@ -9,14 +9,18 @@ class SmartListCard extends StatelessWidget {
     super.key,
     required this.categories,
     required this.onAddCategory,
+    required this.onToggleFavorite,
     required this.onDeleteCategory,
     this.deletingCategoryId,
+    this.updatingFavoriteCategoryId,
   });
 
   final List<SmartCategory> categories;
   final VoidCallback onAddCategory;
+  final ValueChanged<SmartCategory> onToggleFavorite;
   final ValueChanged<String> onDeleteCategory;
   final String? deletingCategoryId;
+  final String? updatingFavoriteCategoryId;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +50,16 @@ class SmartListCard extends StatelessWidget {
                       '\u041a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438 \u0441 \u043b\u0438\u043c\u0438\u0442\u043e\u043c, '
                       '\u0442\u0440\u0430\u0442\u0430\u043c\u0438 \u0438 \u043e\u0441\u0442\u0430\u0442\u043a\u043e\u043c \u0434\u043e '
                       '\u043a\u043e\u043d\u0446\u0430 \u043c\u0435\u0441\u044f\u0446\u0430.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.secondaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '\u041e\u0442\u043c\u0435\u0442\u044c\u0442\u0435 \u0434\u043e 3 \u0438\u0437\u0431\u0440\u0430\u043d\u043d\u044b\u0445 '
+                      '\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0439: \u043e\u043d\u0438 '
+                      '\u043f\u043e\u044f\u0432\u044f\u0442\u0441\u044f \u043f\u0440\u0438 \u0434\u043e\u043b\u0433\u043e\u043c '
+                      '\u043d\u0430\u0436\u0430\u0442\u0438\u0438 \u043d\u0430 QR.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                       ),
@@ -87,6 +101,8 @@ class SmartListCard extends StatelessWidget {
                     ? 0.0
                     : (normalizedSpent / category.plannedMonthly).clamp(0.0, 1.0);
                 final isDeleting = deletingCategoryId == category.id;
+                final isUpdatingFavorite =
+                    updatingFavoriteCategoryId == category.id;
                 final isOverBudget = category.remaining < 0;
                 final balanceLabel = isOverBudget
                     ? '\u041f\u0435\u0440\u0435\u0440\u0430\u0441\u0445\u043e\u0434'
@@ -115,6 +131,26 @@ class SmartListCard extends StatelessWidget {
                                     ?.copyWith(fontWeight: FontWeight.w700),
                               ),
                             ),
+                            if (isUpdatingFavorite)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              IconButton(
+                                onPressed: () => onToggleFavorite(category),
+                                icon: Icon(
+                                  category.isFavorite
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
+                                ),
+                                color: category.isFavorite
+                                    ? AppTheme.yellow
+                                    : AppTheme.secondaryText,
+                                tooltip:
+                                    '\u0418\u0437\u0431\u0440\u0430\u043d\u043d\u0430\u044f \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f',
+                              ),
                             if (isDeleting)
                               const SizedBox(
                                 width: 18,

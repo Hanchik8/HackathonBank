@@ -1,31 +1,163 @@
 import 'package:flutter/material.dart';
 
 import '../models/account_model.dart';
+import '../services/api_client.dart';
+import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
 
 class MyBankScreen extends StatefulWidget {
-  const MyBankScreen({super.key, required this.accounts});
+  const MyBankScreen({
+    super.key,
+    required this.apiService,
+    required this.accounts,
+    required this.onAccountsChanged,
+  });
 
+  final BankApiService apiService;
   final List<AccountModel> accounts;
+  final VoidCallback onAccountsChanged;
 
   @override
   State<MyBankScreen> createState() => _MyBankScreenState();
 }
 
 class _MyBankScreenState extends State<MyBankScreen> {
-  bool _depositOpened = true;
+  late List<AccountModel> _accounts;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _accounts = List<AccountModel>.of(widget.accounts);
+  }
+
+  AccountModel get _mainAccount {
+    for (final account in _accounts) {
+      if (account.type == 'MAIN') {
+        return account;
+      }
+    }
+    return _accounts.first;
+  }
+
+  AccountModel? get _savingsAccount {
+    for (final account in _accounts) {
+      if (account.type == 'SAVINGS') {
+        return account;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _refreshAccounts() async {
+    final accounts = await widget.apiService.fetchAccounts();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _accounts = accounts;
+    });
+  }
+
+  Future<void> _closeDeposit(AccountModel savingsAccount) async {
+    if (_isProcessing || savingsAccount.balance <= 0) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final result = await widget.apiService.executeAction(
+        'CLOSE_DEPOSIT:${savingsAccount.id}',
+      );
+      await _refreshAccounts();
+      widget.onAccountsChanged();
+      if (!mounted) {
+        return;
+      }
+      _showMessage(result.message);
+    } on ApiException catch (error) {
+      if (mounted) {
+        _showMessage(error.message);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openDeposit({
+    required AccountModel mainAccount,
+    required AccountModel savingsAccount,
+  }) async {
+    if (_isProcessing) {
+      return;
+    }
+
+    final amount = await showModalBottomSheet<double>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _DepositTopUpSheet(mainAccount: mainAccount),
+    );
+    if (amount == null || amount <= 0) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final result = await widget.apiService.transferBetweenAccounts(
+        fromAccountId: mainAccount.id,
+        toAccountId: savingsAccount.id,
+        amount: amount,
+        description: 'Пополнение накопительного депозита',
+      );
+      await _refreshAccounts();
+      widget.onAccountsChanged();
+      if (!mounted) {
+        return;
+      }
+      _showMessage(result.message);
+    } on ApiException catch (error) {
+      if (mounted) {
+        _showMessage(error.message);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final mainAccount = widget.accounts.firstWhere(
-      (account) => account.type == 'MAIN',
-      orElse: () => widget.accounts.first,
-    );
-    final savingsAccount = widget.accounts.firstWhere(
-      (account) => account.type == 'SAVINGS',
-      orElse: () => mainAccount,
-    );
+    final mainAccount = _mainAccount;
+    final savingsAccount = _savingsAccount;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -103,15 +235,19 @@ class _MyBankScreenState extends State<MyBankScreen> {
                       title: 'Рассрочки',
                     ),
                     const Divider(color: Color(0xFF2A2A2E), height: 28),
-                    _DepositRow(
-                      account: savingsAccount,
-                      opened: _depositOpened,
-                      onToggle: () {
-                        setState(() {
-                          _depositOpened = !_depositOpened;
-                        });
-                      },
-                    ),
+                    if (savingsAccount != null)
+                      _DepositCard(
+                        account: savingsAccount,
+                        mainAccount: mainAccount,
+                        isProcessing: _isProcessing,
+                        onCloseDeposit: () => _closeDeposit(savingsAccount),
+                        onOpenDeposit: () => _openDeposit(
+                          mainAccount: mainAccount,
+                          savingsAccount: savingsAccount,
+                        ),
+                      )
+                    else
+                      const _UnavailableDepositCard(),
                   ],
                 ),
               ),
@@ -286,16 +422,22 @@ class _ProductRow extends StatelessWidget {
   }
 }
 
-class _DepositRow extends StatelessWidget {
-  const _DepositRow({
+class _DepositCard extends StatelessWidget {
+  const _DepositCard({
     required this.account,
-    required this.opened,
-    required this.onToggle,
+    required this.mainAccount,
+    required this.isProcessing,
+    required this.onCloseDeposit,
+    required this.onOpenDeposit,
   });
 
   final AccountModel account;
-  final bool opened;
-  final VoidCallback onToggle;
+  final AccountModel mainAccount;
+  final bool isProcessing;
+  final VoidCallback onCloseDeposit;
+  final VoidCallback onOpenDeposit;
+
+  bool get _isOpened => account.balance > 0;
 
   @override
   Widget build(BuildContext context) {
@@ -305,7 +447,7 @@ class _DepositRow extends StatelessWidget {
         color: AppTheme.surfaceSoft,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: opened
+          color: _isOpened
               ? AppTheme.accent.withValues(alpha: 0.24)
               : Colors.white10,
         ),
@@ -328,15 +470,15 @@ class _DepositRow extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: opened
+                  color: _isOpened
                       ? AppTheme.accent.withValues(alpha: 0.16)
                       : Colors.white10,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  opened ? 'Открыт' : 'Закрыт',
+                  _isOpened ? 'Открыт' : 'Закрыт',
                   style: TextStyle(
-                    color: opened ? AppTheme.accent : AppTheme.secondaryText,
+                    color: _isOpened ? AppTheme.accent : AppTheme.secondaryText,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -348,34 +490,217 @@ class _DepositRow extends StatelessWidget {
             SomFormatter.amount(account.balance),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w900,
-              color: opened ? AppTheme.accent : Colors.white,
+              color: _isOpened ? AppTheme.accent : Colors.white,
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            opened
-                ? 'Доходный продукт MBank. Средства доступны для контроля в любое время.'
-                : 'Депозит скрыт из активных продуктов. Его можно снова открыть одной кнопкой.',
+            _isOpened
+                ? 'Деньги находятся на накопительном депозите. При закрытии весь остаток вернется на основной счет.'
+                : 'Депозит пуст. Его можно снова пополнить переводом с основного счета.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppTheme.secondaryText,
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: onToggle,
-              style: opened
-                  ? null
-                  : ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                    ),
-              child: Text(opened ? 'Закрыть депозит' : 'Открыть депозит'),
-            ),
+          const SizedBox(height: 10),
+          Text(
+            'Основной счет: ${SomFormatter.amount(mainAccount.balance)}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
           ),
+          const SizedBox(height: 16),
+          if (_isOpened) ...<Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isProcessing ? null : onOpenDeposit,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white24),
+                    ),
+                    child: const Text('Пополнить'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isProcessing ? null : onCloseDeposit,
+                    child: isProcessing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Закрыть депозит'),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...<Widget>[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed:
+                    isProcessing || mainAccount.balance <= 0 ? null : onOpenDeposit,
+                child: isProcessing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Открыть депозит'),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _UnavailableDepositCard extends StatelessWidget {
+  const _UnavailableDepositCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceSoft,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Text(
+        'Накопительный депозит недоступен для этого профиля.',
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
+      ),
+    );
+  }
+}
+
+class _DepositTopUpSheet extends StatefulWidget {
+  const _DepositTopUpSheet({required this.mainAccount});
+
+  final AccountModel mainAccount;
+
+  @override
+  State<_DepositTopUpSheet> createState() => _DepositTopUpSheetState();
+}
+
+class _DepositTopUpSheetState extends State<_DepositTopUpSheet> {
+  final TextEditingController _amountController = TextEditingController();
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = double.tryParse(_amountController.text.replaceAll(',', '.'));
+    if (amount == null || amount <= 0) {
+      _showMessage('Введите корректную сумму.');
+      return;
+    }
+    if (amount > widget.mainAccount.balance) {
+      _showMessage('На основном счете недостаточно средств.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+    Navigator.of(context).pop(amount);
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 24, 16, bottomInset + 16),
+      child: Material(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Открыть накопительный депозит',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Укажите сумму перевода с основного счета.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Доступно: ${SomFormatter.amount(widget.mainAccount.balance)}',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: 'Сумма в KGS',
+                  labelStyle: const TextStyle(color: AppTheme.secondaryText),
+                  filled: true,
+                  fillColor: AppTheme.surfaceSoft,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(color: Colors.white10),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: const BorderSide(color: AppTheme.accent),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submit,
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Перевести в депозит'),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

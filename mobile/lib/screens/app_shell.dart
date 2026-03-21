@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/smart_category_model.dart';
 import '../services/bank_api_dashboard_repository.dart';
 import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
@@ -23,35 +24,94 @@ class _AppShellState extends State<AppShell> {
 
   int _currentIndex = 0;
   int _refreshSignal = 0;
+  int _quickCategorySignal = 0;
   TransferRecipientMode _preferredTransferMode = TransferRecipientMode.user;
+  String? _preferredSmartCategoryId;
+  List<SmartCategory> _favoriteSmartCategories = const <SmartCategory>[];
 
   @override
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? BankApiService();
     _dashboardRepository = BankApiDashboardRepository(apiService: _apiService);
+    _refreshFavoriteCategories();
   }
 
   void _handleDataChanged() {
     setState(() {
       _refreshSignal++;
     });
+    _refreshFavoriteCategories();
   }
 
-  void _openQrAction() {
+  Future<void> _refreshFavoriteCategories() async {
+    try {
+      final smartListEnabled = await _apiService.getSmartListEnabled();
+      if (!smartListEnabled) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _favoriteSmartCategories = const <SmartCategory>[];
+          _preferredSmartCategoryId = null;
+        });
+        return;
+      }
+
+      final categories = await _apiService.fetchSmartCategories();
+      if (!mounted) {
+        return;
+      }
+      final favorites = categories
+          .where((category) => category.isFavorite)
+          .take(3)
+          .toList(growable: false);
+      final hasPreferred = _preferredSmartCategoryId != null &&
+          favorites.any((category) => category.id == _preferredSmartCategoryId);
+      setState(() {
+        _favoriteSmartCategories = favorites;
+        if (!hasPreferred) {
+          _preferredSmartCategoryId = null;
+        }
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _favoriteSmartCategories = const <SmartCategory>[];
+      });
+    }
+  }
+
+  void _openQrAction({String? smartCategoryId}) {
+    final selectedCategory = _favoriteSmartCategories
+        .where((category) => category.id == smartCategoryId)
+        .firstOrNull;
+
     setState(() {
       _preferredTransferMode = TransferRecipientMode.merchant;
+      _preferredSmartCategoryId = smartCategoryId;
+      _quickCategorySignal++;
       _currentIndex = 2;
     });
+
+    final message = selectedCategory == null
+        ? 'Открыта оплата магазину.'
+        : 'Открыта оплата магазину с категорией "${selectedCategory.name}".';
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Открыта оплата магазину.')));
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     final screens = <Widget>[
-      HomeScreen(apiService: _apiService, refreshSignal: _refreshSignal),
+      HomeScreen(
+        apiService: _apiService,
+        refreshSignal: _refreshSignal,
+        onDataChanged: _handleDataChanged,
+      ),
       AiDashboardScreen(
         repository: _dashboardRepository,
         refreshSignal: _refreshSignal,
@@ -62,10 +122,13 @@ class _AppShellState extends State<AppShell> {
         refreshSignal: _refreshSignal,
         onDataChanged: _handleDataChanged,
         preferredMode: _preferredTransferMode,
+        preferredSmartCategoryId: _preferredSmartCategoryId,
+        quickCategorySignal: _quickCategorySignal,
       ),
       const PlaceholderScreen(
         title: 'Еще',
-        subtitle: 'Здесь позже можно разместить настройки, уведомления и профиль.',
+        subtitle:
+            'Здесь позже можно разместить настройки, уведомления и профиль.',
       ),
     ];
 
@@ -109,8 +172,11 @@ class _AppShellState extends State<AppShell> {
       ),
       bottomNavigationBar: _MbankBottomBar(
         currentIndex: _currentIndex,
+        favoriteCategories: _favoriteSmartCategories,
         onSelect: (index) => setState(() => _currentIndex = index),
-        onQrTap: _openQrAction,
+        onQrTap: () => _openQrAction(),
+        onQuickCategorySelected: (category) =>
+            _openQrAction(smartCategoryId: category.id),
       ),
     );
   }
@@ -119,13 +185,17 @@ class _AppShellState extends State<AppShell> {
 class _MbankBottomBar extends StatelessWidget {
   const _MbankBottomBar({
     required this.currentIndex,
+    required this.favoriteCategories,
     required this.onSelect,
     required this.onQrTap,
+    required this.onQuickCategorySelected,
   });
 
   final int currentIndex;
+  final List<SmartCategory> favoriteCategories;
   final ValueChanged<int> onSelect;
   final VoidCallback onQrTap;
+  final ValueChanged<SmartCategory> onQuickCategorySelected;
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +222,11 @@ class _MbankBottomBar extends StatelessWidget {
               active: currentIndex == 1,
               onTap: () => onSelect(1),
             ),
-            _QrActionButton(onTap: onQrTap),
+            _QrActionButton(
+              onTap: onQrTap,
+              favoriteCategories: favoriteCategories,
+              onQuickCategorySelected: onQuickCategorySelected,
+            ),
             _NavItem(
               label: 'Платежи',
               icon: Icons.swap_horiz_rounded,
@@ -213,16 +287,157 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-class _QrActionButton extends StatelessWidget {
-  const _QrActionButton({required this.onTap});
+class _QrActionButton extends StatefulWidget {
+  const _QrActionButton({
+    required this.onTap,
+    required this.favoriteCategories,
+    required this.onQuickCategorySelected,
+  });
 
   final VoidCallback onTap;
+  final List<SmartCategory> favoriteCategories;
+  final ValueChanged<SmartCategory> onQuickCategorySelected;
+
+  @override
+  State<_QrActionButton> createState() => _QrActionButtonState();
+}
+
+class _QrActionButtonState extends State<_QrActionButton> {
+  final GlobalKey _buttonKey = GlobalKey();
+
+  OverlayEntry? _overlayEntry;
+  String? _hoveredCategoryId;
+  List<_QuickCategoryAnchor> _anchors = const <_QuickCategoryAnchor>[];
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _QrActionButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_overlayEntry != null &&
+        oldWidget.favoriteCategories != widget.favoriteCategories) {
+      _removeOverlay();
+    }
+  }
+
+  void _handleLongPressStart(LongPressStartDetails details) {
+    if (widget.favoriteCategories.isEmpty) {
+      return;
+    }
+    _showOverlay();
+    _updateHovered(details.globalPosition);
+  }
+
+  void _handleLongPressMove(LongPressMoveUpdateDetails details) {
+    _updateHovered(details.globalPosition);
+  }
+
+  void _handleLongPressEnd(LongPressEndDetails details) {
+    final selectedCategory = _anchors
+        .where((anchor) => anchor.category.id == _hoveredCategoryId)
+        .map((anchor) => anchor.category)
+        .firstOrNull;
+    _removeOverlay();
+    if (selectedCategory != null) {
+      widget.onQuickCategorySelected(selectedCategory);
+    }
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (overlay == null || renderBox == null) {
+      return;
+    }
+
+    final origin = renderBox.localToGlobal(Offset.zero);
+    final buttonRect = Rect.fromLTWH(
+      origin.dx,
+      origin.dy,
+      renderBox.size.width,
+      renderBox.size.height,
+    );
+    _anchors = _buildAnchors(buttonRect, widget.favoriteCategories);
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => _QuickQrOverlay(
+        anchors: _anchors,
+        hoveredCategoryId: _hoveredCategoryId,
+      ),
+    );
+    overlay.insert(_overlayEntry!);
+  }
+
+  void _removeOverlay() {
+    _hoveredCategoryId = null;
+    _anchors = const <_QuickCategoryAnchor>[];
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _updateHovered(Offset globalPosition) {
+    if (_overlayEntry == null) {
+      return;
+    }
+    final hoveredAnchor = _anchors
+        .where(
+          (anchor) =>
+              (anchor.center - globalPosition).distance <= anchor.radius + 10,
+        )
+        .firstOrNull;
+    final nextHoveredId = hoveredAnchor?.category.id;
+    if (nextHoveredId == _hoveredCategoryId) {
+      return;
+    }
+    setState(() {
+      _hoveredCategoryId = nextHoveredId;
+    });
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  List<_QuickCategoryAnchor> _buildAnchors(
+    Rect buttonRect,
+    List<SmartCategory> categories,
+  ) {
+    const radius = 34.0;
+    final center = buttonRect.center;
+    final positions = switch (categories.length) {
+      1 => <Offset>[Offset(center.dx, center.dy - 92)],
+      2 => <Offset>[
+        Offset(center.dx - 58, center.dy - 78),
+        Offset(center.dx + 58, center.dy - 78),
+      ],
+      _ => <Offset>[
+        Offset(center.dx - 68, center.dy - 78),
+        Offset(center.dx, center.dy - 110),
+        Offset(center.dx + 68, center.dy - 78),
+      ],
+    };
+
+    return List<_QuickCategoryAnchor>.generate(
+      categories.length,
+      (index) => _QuickCategoryAnchor(
+        category: categories[index],
+        center: positions[index],
+        radius: radius,
+      ),
+      growable: false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(28),
+    return GestureDetector(
+      key: _buttonKey,
+      onTap: widget.onTap,
+      onLongPressStart: _handleLongPressStart,
+      onLongPressMoveUpdate: _handleLongPressMove,
+      onLongPressEnd: _handleLongPressEnd,
       child: Container(
         width: 58,
         height: 58,
@@ -246,6 +461,174 @@ class _QrActionButton extends StatelessWidget {
   }
 }
 
+class _QuickQrOverlay extends StatelessWidget {
+  const _QuickQrOverlay({
+    required this.anchors,
+    required this.hoveredCategoryId,
+  });
+
+  final List<_QuickCategoryAnchor> anchors;
+  final String? hoveredCategoryId;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.18),
+                ),
+              ),
+            ),
+            for (final anchor in anchors)
+              Positioned(
+                left: anchor.center.dx - anchor.radius,
+                top: anchor.center.dy - anchor.radius,
+                child: _QuickCategoryBubble(
+                  category: anchor.category,
+                  highlighted: anchor.category.id == hoveredCategoryId,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickCategoryBubble extends StatelessWidget {
+  const _QuickCategoryBubble({
+    required this.category,
+    required this.highlighted,
+  });
+
+  final SmartCategory category;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _categoryColor(category.name);
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 100),
+      scale: highlighted ? 1.12 : 1,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: highlighted ? AppTheme.surface : const Color(0xFFF2F2F2),
+          border: Border.all(
+            color: highlighted ? AppTheme.accent : Colors.white,
+            width: 2,
+          ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: highlighted ? 0.35 : 0.18),
+              blurRadius: highlighted ? 22 : 12,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(_categoryIcon(category.name), color: color, size: 24),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Text(
+                category.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: highlighted ? Colors.white : Colors.black,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static IconData _categoryIcon(String name) {
+    final normalized = name.toLowerCase();
+    if (normalized.contains('ед') ||
+        normalized.contains('продукт') ||
+        normalized.contains('food') ||
+        normalized.contains('grocery')) {
+      return Icons.restaurant_rounded;
+    }
+    if (normalized.contains('транспорт') ||
+        normalized.contains('такси') ||
+        normalized.contains('travel') ||
+        normalized.contains('transport')) {
+      return Icons.directions_car_filled_rounded;
+    }
+    if (normalized.contains('перевод') || normalized.contains('transfer')) {
+      return Icons.swap_horiz_rounded;
+    }
+    if (normalized.contains('развлеч') || normalized.contains('fun')) {
+      return Icons.movie_filter_rounded;
+    }
+    if (normalized.contains('покуп') ||
+        normalized.contains('shop') ||
+        normalized.contains('market')) {
+      return Icons.shopping_bag_rounded;
+    }
+    return Icons.category_rounded;
+  }
+
+  static Color _categoryColor(String name) {
+    final normalized = name.toLowerCase();
+    if (normalized.contains('ед') ||
+        normalized.contains('продукт') ||
+        normalized.contains('food') ||
+        normalized.contains('grocery')) {
+      return const Color(0xFF0EBE7F);
+    }
+    if (normalized.contains('транспорт') ||
+        normalized.contains('такси') ||
+        normalized.contains('travel') ||
+        normalized.contains('transport')) {
+      return const Color(0xFF3F8CFF);
+    }
+    if (normalized.contains('перевод') || normalized.contains('transfer')) {
+      return const Color(0xFF23D160);
+    }
+    if (normalized.contains('развлеч') || normalized.contains('fun')) {
+      return const Color(0xFFE8505B);
+    }
+    if (normalized.contains('покуп') ||
+        normalized.contains('shop') ||
+        normalized.contains('market')) {
+      return const Color(0xFFF5D547);
+    }
+    return AppTheme.accent;
+  }
+}
+
+class _QuickCategoryAnchor {
+  const _QuickCategoryAnchor({
+    required this.category,
+    required this.center,
+    required this.radius,
+  });
+
+  final SmartCategory category;
+  final Offset center;
+  final double radius;
+}
+
 class _GlowOrb extends StatelessWidget {
   const _GlowOrb({required this.color, required this.size});
 
@@ -267,4 +650,8 @@ class _GlowOrb extends StatelessWidget {
       ),
     );
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

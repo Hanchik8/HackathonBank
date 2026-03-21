@@ -17,10 +17,12 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.apiService,
     required this.refreshSignal,
+    required this.onDataChanged,
   });
 
   final BankApiService apiService;
   final int refreshSignal;
+  final VoidCallback onDataChanged;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -81,7 +83,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openMyBankScreen(List<AccountModel> accounts) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => MyBankScreen(accounts: accounts),
+        builder: (_) => MyBankScreen(
+          apiService: widget.apiService,
+          accounts: accounts,
+          onAccountsChanged: widget.onDataChanged,
+        ),
       ),
     );
   }

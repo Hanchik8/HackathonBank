@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/account_model.dart';
@@ -17,12 +16,16 @@ class TransfersScreen extends StatefulWidget {
     required this.refreshSignal,
     required this.onDataChanged,
     required this.preferredMode,
+    this.preferredSmartCategoryId,
+    this.quickCategorySignal = 0,
   });
 
   final BankApiService apiService;
   final int refreshSignal;
   final VoidCallback onDataChanged;
   final TransferRecipientMode preferredMode;
+  final String? preferredSmartCategoryId;
+  final int quickCategorySignal;
 
   @override
   State<TransfersScreen> createState() => _TransfersScreenState();
@@ -47,6 +50,7 @@ class _TransfersScreenState extends State<TransfersScreen> {
   void initState() {
     super.initState();
     _mode = widget.preferredMode;
+    _selectedSmartCategoryId = widget.preferredSmartCategoryId;
     _loadData();
   }
 
@@ -56,6 +60,17 @@ class _TransfersScreenState extends State<TransfersScreen> {
     if (oldWidget.preferredMode != widget.preferredMode) {
       setState(() {
         _mode = widget.preferredMode;
+      });
+    }
+    if (oldWidget.quickCategorySignal != widget.quickCategorySignal) {
+      setState(() {
+        _mode = TransferRecipientMode.merchant;
+        _selectedSmartCategoryId = widget.preferredSmartCategoryId;
+      });
+    } else if (oldWidget.preferredSmartCategoryId !=
+        widget.preferredSmartCategoryId) {
+      setState(() {
+        _selectedSmartCategoryId = widget.preferredSmartCategoryId;
       });
     }
     if (oldWidget.refreshSignal != widget.refreshSignal) {
@@ -87,7 +102,9 @@ class _TransfersScreenState extends State<TransfersScreen> {
         return;
       }
 
-      final accounts = results[0] as List<AccountModel>;
+      final accounts = (results[0] as List<AccountModel>)
+          .where((account) => account.type == 'MAIN')
+          .toList(growable: false);
       final smartListEnabled = results[1] as bool;
       final smartCategories = results[2] as List<SmartCategory>;
 
@@ -95,9 +112,20 @@ class _TransfersScreenState extends State<TransfersScreen> {
         _accounts = accounts;
         _smartListEnabled = smartListEnabled;
         _smartCategories = smartCategories;
-        _selectedAccountId ??= accounts.first.id;
+        if (accounts.isEmpty) {
+          _selectedAccountId = null;
+        } else if (!_containsAccount(accounts, _selectedAccountId)) {
+          _selectedAccountId = accounts.first.id;
+        }
         if (!_smartCategories.any((item) => item.id == _selectedSmartCategoryId)) {
           _selectedSmartCategoryId = null;
+        }
+        if (_selectedSmartCategoryId == null &&
+            widget.preferredSmartCategoryId != null &&
+            _smartCategories.any(
+              (item) => item.id == widget.preferredSmartCategoryId,
+            )) {
+          _selectedSmartCategoryId = widget.preferredSmartCategoryId;
         }
         _isLoading = false;
       });
@@ -144,25 +172,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
         description: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
+        category:
+            _selectedSmartCategory == null
+                ? _defaultTransactionCategory()
+                : _selectedSmartCategory!.name,
+        iconKey: _mode == TransferRecipientMode.user ? 'transfer' : 'shopping',
+        smartCategoryId: _selectedSmartCategoryId,
       );
-
-      if (kDebugMode) {
-        final smartCategory = _smartCategories.where(
-          (item) => item.id == _selectedSmartCategoryId,
-        );
-        final selectedCategory =
-            smartCategory.isEmpty ? null : smartCategory.first;
-        await widget.apiService.createTransaction(
-          accountId: _selectedAccountId!,
-          title: _transactionTitle(recipientName),
-          counterparty: recipientName,
-          amount: amount,
-          type: _mode == TransferRecipientMode.user ? 'TRANSFER' : 'PURCHASE',
-          category: selectedCategory?.name ?? _defaultTransactionCategory(),
-          iconKey: _mode == TransferRecipientMode.user ? 'transfer' : 'shopping',
-          smartCategoryId: _selectedSmartCategoryId,
-        );
-      }
 
       if (!mounted) {
         return;
@@ -233,14 +249,13 @@ class _TransfersScreenState extends State<TransfersScreen> {
     };
   }
 
-  String _transactionTitle(String recipientName) {
-    if (_noteController.text.trim().isNotEmpty) {
-      return _noteController.text.trim();
+  SmartCategory? get _selectedSmartCategory {
+    for (final category in _smartCategories) {
+      if (category.id == _selectedSmartCategoryId) {
+        return category;
+      }
     }
-    return switch (_mode) {
-      TransferRecipientMode.user => 'Перевод $recipientName',
-      TransferRecipientMode.merchant => 'Оплата $recipientName',
-    };
+    return null;
   }
 
   @override
@@ -263,6 +278,18 @@ class _TransfersScreenState extends State<TransfersScreen> {
     }
 
     final accounts = _accounts!;
+    if (accounts.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'Нет доступного счета для перевода. Переводы с накопительного депозита отключены.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ),
+      );
+    }
     final selectedAccount = accounts.firstWhere(
       (account) => account.id == _selectedAccountId,
       orElse: () => accounts.first,
@@ -387,6 +414,15 @@ class _TransfersScreenState extends State<TransfersScreen> {
                       _selectedSmartCategoryId = value;
                     }),
                   ),
+                  if (_selectedSmartCategoryId != null) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Категория уже выбрана из быстрого QR-меню. Можно оставить ее или поменять вручную.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.secondaryText,
+                      ),
+                    ),
+                  ],
                   if (_smartCategories.isEmpty) ...<Widget>[
                     const SizedBox(height: 8),
                     Text(
@@ -462,9 +498,21 @@ class _TransfersScreenState extends State<TransfersScreen> {
   String _displayAccountName(String name) {
     return switch (name) {
       'Main' => 'Основной счет',
-      'Savings' => 'Сбережения',
+      'Savings' => 'Накопительный депозит',
       _ => name,
     };
+  }
+
+  bool _containsAccount(List<AccountModel> accounts, int? accountId) {
+    if (accountId == null) {
+      return false;
+    }
+    for (final account in accounts) {
+      if (account.id == accountId) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

@@ -200,6 +200,18 @@ class MbankAdapter implements DashboardRepository {
   }
 
   @override
+  Future<void> setSmartCategoryFavorite(
+    String categoryId,
+    bool isFavorite,
+  ) {
+    // TODO: Confirm the real MBank endpoint for marking quick categories.
+    return _client.setSmartCategoryFavorite(
+      categoryId: categoryId,
+      isFavorite: isFavorite,
+    );
+  }
+
+  @override
   Future<void> deleteSmartCategory(String categoryId) {
     // TODO: Confirm the real MBank smart-category deletion endpoint.
     return _client.deleteSmartCategory(categoryId);
@@ -343,6 +355,7 @@ class MbankAdapter implements DashboardRepository {
       name: category.name.isEmpty ? 'Категория' : category.name,
       plannedMonthly: category.plannedMonthly,
       remaining: category.remaining,
+      isFavorite: category.isFavorite,
     );
   }
 
@@ -425,6 +438,11 @@ abstract class ExistingMbankClient {
   Future<ExistingMbankSmartCategory> createSmartCategory({
     required String name,
     required double plannedMonthly,
+  });
+
+  Future<void> setSmartCategoryFavorite({
+    required String categoryId,
+    required bool isFavorite,
   });
 
   Future<void> deleteSmartCategory(String categoryId);
@@ -707,12 +725,14 @@ class ExistingMbankSmartCategory {
     required this.name,
     required this.plannedMonthly,
     required this.remaining,
+    required this.isFavorite,
   });
 
   final String id;
   final String name;
   final double plannedMonthly;
   final double remaining;
+  final bool isFavorite;
 
   factory ExistingMbankSmartCategory.fromJson(Map<String, dynamic> json) {
     return ExistingMbankSmartCategory(
@@ -720,6 +740,7 @@ class ExistingMbankSmartCategory {
       name: json['name'] as String? ?? '',
       plannedMonthly: (json['plannedMonthly'] as num?)?.toDouble() ?? 0.0,
       remaining: (json['remaining'] as num?)?.toDouble() ?? 0.0,
+      isFavorite: json['isFavorite'] as bool? ?? false,
     );
   }
 }
