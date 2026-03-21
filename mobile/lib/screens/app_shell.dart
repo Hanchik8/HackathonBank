@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../models/scheduled_payment_model.dart';
 import '../models/smart_category_model.dart';
 import '../services/bank_api_dashboard_repository.dart';
 import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/due_payment_banner.dart';
 import 'ai_dashboard_screen.dart';
 import 'home_screen.dart';
 import 'placeholder_screen.dart';
@@ -28,6 +30,9 @@ class _AppShellState extends State<AppShell> {
   TransferRecipientMode _preferredTransferMode = TransferRecipientMode.user;
   String? _preferredSmartCategoryId;
   List<SmartCategory> _favoriteSmartCategories = const <SmartCategory>[];
+  List<ScheduledPaymentModel> _dueTodayPayments =
+      const <ScheduledPaymentModel>[];
+  bool _isDueBannerDismissed = false;
 
   @override
   void initState() {
@@ -35,6 +40,7 @@ class _AppShellState extends State<AppShell> {
     _apiService = widget.apiService ?? BankApiService();
     _dashboardRepository = BankApiDashboardRepository(apiService: _apiService);
     _refreshFavoriteCategories();
+    _refreshDuePaymentBanner();
   }
 
   void _handleDataChanged() {
@@ -42,6 +48,7 @@ class _AppShellState extends State<AppShell> {
       _refreshSignal++;
     });
     _refreshFavoriteCategories();
+    _refreshDuePaymentBanner(resetDismissal: true);
   }
 
   Future<void> _refreshFavoriteCategories() async {
@@ -84,6 +91,46 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Future<void> _refreshDuePaymentBanner({bool resetDismissal = false}) async {
+    const noPayments = <ScheduledPaymentModel>[];
+
+    try {
+      final effectiveDate = await _apiService.getEffectiveDate();
+      final horizonDays = _daysUntilEndOfMonthFrom(effectiveDate);
+      final dashboard = await _apiService.fetchDashboard(horizonDays);
+      final dueTodayPayments = dashboard.scheduledPayments
+          .where((payment) => _isSameDay(payment.dueDate, effectiveDate))
+          .toList(growable: false);
+
+      if (!mounted) {
+        return;
+      }
+
+      _setDuePaymentBannerState(
+        dueTodayPayments,
+        resetDismissal: resetDismissal,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      _setDuePaymentBannerState(noPayments, resetDismissal: resetDismissal);
+    }
+  }
+
+  void _setDuePaymentBannerState(
+    List<ScheduledPaymentModel> payments, {
+    required bool resetDismissal,
+  }) {
+    setState(() {
+      _dueTodayPayments = payments;
+      if (resetDismissal || payments.isEmpty) {
+        _isDueBannerDismissed = false;
+      }
+    });
+  }
+
   void _openQrAction({String? smartCategoryId}) {
     final selectedCategory = _favoriteSmartCategories
         .where((category) => category.id == smartCategoryId)
@@ -106,6 +153,8 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    final showDueBanner =
+        _dueTodayPayments.isNotEmpty && !_isDueBannerDismissed;
     final screens = <Widget>[
       HomeScreen(
         apiService: _apiService,
@@ -165,7 +214,24 @@ class _AppShellState extends State<AppShell> {
             ),
             SafeArea(
               bottom: false,
-              child: IndexedStack(index: _currentIndex, children: screens),
+              child: Column(
+                children: <Widget>[
+                  if (showDueBanner)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+                      child: DuePaymentBanner(
+                        payments: _dueTodayPayments,
+                        onOpenAnalysis: () => setState(() => _currentIndex = 1),
+                        onDismiss: () => setState(
+                          () => _isDueBannerDismissed = true,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: IndexedStack(index: _currentIndex, children: screens),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -650,6 +716,18 @@ class _GlowOrb extends StatelessWidget {
       ),
     );
   }
+}
+
+int _daysUntilEndOfMonthFrom(DateTime date) {
+  final monthEnd = DateTime(date.year, date.month + 1, 0);
+  final current = DateTime(date.year, date.month, date.day);
+  return monthEnd.difference(current).inDays;
+}
+
+bool _isSameDay(DateTime left, DateTime right) {
+  return left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
 }
 
 extension<T> on Iterable<T> {

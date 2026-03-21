@@ -1,7 +1,9 @@
 import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_analysis_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
+import 'package:hackathon_bank_mobile/models/daily_safe_to_save_model.dart';
 import 'package:hackathon_bank_mobile/models/save_suggestion_model.dart';
+import 'package:hackathon_bank_mobile/models/simulate_day_response_model.dart';
 import 'package:hackathon_bank_mobile/models/smart_category_model.dart';
 import 'package:hackathon_bank_mobile/models/transaction_model.dart';
 import 'package:hackathon_bank_mobile/models/transfer_result_model.dart';
@@ -155,6 +157,32 @@ SaveSuggestionModel sampleSaveSuggestion() {
   );
 }
 
+DailySafeToSaveModel sampleDailySafeToSave() {
+  return DailySafeToSaveModel(
+    enabled: true,
+    suggestedAmount: 1200,
+    safeBalance: 10800,
+    currentBalance: 15000,
+    requiredPayments: 3200,
+    lifeBuffer: 3000,
+    nextIncomeDate: DateTime.now().add(const Duration(days: 8)),
+    daysToNextIncome: 8,
+    status: 'OK',
+  );
+}
+
+SimulateDayResponseModel sampleSimulateDayResponse() {
+  final now = DateTime.now();
+  return SimulateDayResponseModel(
+    currentDate: DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+    currentBalance: 13800,
+    savingsBalance: 51200,
+    savedAmount: 1200,
+    autoSaveExecuted: true,
+    notification: 'Safe-to-Save выполнил перевод 1 200 KGS.',
+  );
+}
+
 AiDashboardModel sampleDashboard([
   List<ScheduledPaymentModel>? scheduledPayments,
 ]) {
@@ -216,6 +244,7 @@ class FakeBankApiService extends BankApiService {
     AiExecutionModel? execution,
     List<SmartCategory>? smartCategories,
     SaveSuggestionModel? saveSuggestion,
+    DailySafeToSaveModel? dailySafeToSave,
     TransferResultModel? transferResult,
     TransferResultModel? internalTransferResult,
   }) : _accounts =
@@ -230,6 +259,7 @@ class FakeBankApiService extends BankApiService {
          smartCategories ?? sampleSmartCategories(),
        ),
        _saveSuggestion = saveSuggestion ?? sampleSaveSuggestion(),
+       _dailySafeToSaveTemplate = dailySafeToSave ?? sampleDailySafeToSave(),
        _transferResult = transferResult ?? sampleTransferResult(),
        _internalTransferResult =
            internalTransferResult ?? sampleInternalTransferResult(),
@@ -246,11 +276,13 @@ class FakeBankApiService extends BankApiService {
   final AiAnalysisModel? _analysisOverride;
   final AiExecutionModel _executionFallback;
   final SaveSuggestionModel _saveSuggestion;
+  final DailySafeToSaveModel _dailySafeToSaveTemplate;
   final TransferResultModel _transferResult;
   final TransferResultModel _internalTransferResult;
   final List<ScheduledPaymentModel> _scheduledPayments;
   bool _smartListEnabled = true;
   bool _adminModeEnabled = false;
+  bool _autoDailySaveEnabled = false;
   DateTime _effectiveDate = DateTime(
     DateTime.now().year,
     DateTime.now().month,
@@ -277,6 +309,8 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastTransactionDraft;
   int createSmartCategoryCalls = 0;
   Map<String, Object?>? lastSmartCategoryDraft;
+  int simulateDayCalls = 0;
+  bool? lastAutoDailySaveEnabled;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -290,6 +324,50 @@ class FakeBankApiService extends BankApiService {
 
   @override
   Future<SaveSuggestionModel> suggestEndOfMonthSave() async => _saveSuggestion;
+
+  @override
+  Future<DailySafeToSaveModel> fetchDailySafeToSave() async =>
+      _buildDailySafeToSave();
+
+  @override
+  Future<bool> getAutoDailySaveEnabled() async => _autoDailySaveEnabled;
+
+  @override
+  Future<void> setAutoDailySaveEnabled(bool enabled) async {
+    _autoDailySaveEnabled = enabled;
+    lastAutoDailySaveEnabled = enabled;
+  }
+
+  @override
+  Future<SimulateDayResponseModel> simulateDay() async {
+    simulateDayCalls += 1;
+    _effectiveDate = _today().add(const Duration(days: 1));
+    final preview = _buildDailySafeToSave();
+    var savedAmount = 0.0;
+    var executed = false;
+    var notification = 'День смоделирован.';
+
+    if (_autoDailySaveEnabled &&
+        preview.enabled &&
+        preview.suggestedAmount > 0 &&
+        _savingsAccount() != null) {
+      savedAmount = preview.suggestedAmount;
+      executed = true;
+      _updateAccountBalance(_mainAccount().id, -savedAmount);
+      _updateAccountBalance(_savingsAccount()!.id, savedAmount);
+      notification =
+          'Автосейв перевел ${savedAmount.toStringAsFixed(0)} KGS в накопления.';
+    }
+
+    return SimulateDayResponseModel(
+      currentDate: _effectiveDate,
+      currentBalance: _mainAccount().balance,
+      savingsBalance: _savingsAccount()?.balance ?? 0.0,
+      savedAmount: savedAmount,
+      autoSaveExecuted: executed,
+      notification: notification,
+    );
+  }
 
   @override
   Future<bool> getSmartListEnabled() async => _smartListEnabled;
@@ -1035,6 +1113,54 @@ class FakeBankApiService extends BankApiService {
       return 'loan';
     }
     return 'calendar';
+  }
+
+  DailySafeToSaveModel _buildDailySafeToSave() {
+    final mainBalance = _mainAccount().balance;
+    final today = _today();
+    final nextIncomeDate = _nextIncomeDate(today);
+    final requiredPayments = _scheduledPayments
+        .where((payment) => !payment.dueDate.isBefore(today))
+        .where(
+          (payment) => nextIncomeDate == null || !payment.dueDate.isAfter(nextIncomeDate),
+        )
+        .fold<double>(0.0, (sum, payment) => sum + payment.amount);
+    final lifeBuffer = _dailySafeToSaveTemplate.lifeBuffer;
+    final safeBalance = mainBalance - requiredPayments - lifeBuffer;
+    final suggestedAmount = safeBalance > 0 ? safeBalance : 0.0;
+
+    return DailySafeToSaveModel(
+      enabled: _dailySafeToSaveTemplate.enabled,
+      suggestedAmount: suggestedAmount,
+      safeBalance: safeBalance,
+      currentBalance: mainBalance,
+      requiredPayments: requiredPayments,
+      lifeBuffer: lifeBuffer,
+      nextIncomeDate: nextIncomeDate,
+      daysToNextIncome: nextIncomeDate == null
+          ? 0
+          : nextIncomeDate.difference(today).inDays,
+      status: suggestedAmount > 0 ? 'READY' : 'WAIT',
+    );
+  }
+
+  DateTime? _nextIncomeDate(DateTime today) {
+    final incomes = _transactions
+        .where((transaction) => transaction.amount > 0)
+        .map(
+          (transaction) => DateTime(
+            transaction.occurredAt.year,
+            transaction.occurredAt.month,
+            transaction.occurredAt.day,
+          ),
+        )
+        .where((date) => !date.isBefore(today))
+        .toList(growable: false)
+      ..sort();
+    if (incomes.isNotEmpty) {
+      return incomes.first;
+    }
+    return today.add(Duration(days: _dailySafeToSaveTemplate.daysToNextIncome));
   }
 }
 

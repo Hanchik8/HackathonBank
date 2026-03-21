@@ -4,6 +4,7 @@ import '../contracts/dashboard_repository.dart';
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
+import '../models/daily_safe_to_save_model.dart';
 import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
@@ -45,6 +46,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   AiDashboardModel? _dashboard;
   AiAnalysisModel? _analysis;
   SaveSuggestionModel? _saveSuggestion;
+  DailySafeToSaveModel? _dailySafeToSave;
   List<TransactionModel>? _transactions;
   List<AccountModel>? _accounts;
   List<SmartCategory>? _smartCategories;
@@ -58,10 +60,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   bool _isCreatingCategory = false;
   bool _isTogglingSmartList = false;
   bool _isTogglingAdminMode = false;
+  bool _isTogglingAutoDailySave = false;
   bool _isApplyingAdminAction = false;
+  bool _isSimulateTickInFlight = false;
 
   bool _smartListEnabled = true;
   bool _adminModeEnabled = false;
+  bool _autoDailySaveEnabled = false;
   String? _deletingCategoryId;
   String? _updatingFavoriteCategoryId;
   int? _deletingPaymentId;
@@ -102,8 +107,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         widget.repository.fetchAccounts(),
         widget.repository.fetchSmartCategories(),
         widget.repository.suggestEndOfMonthSave(),
+        widget.repository.fetchDailySafeToSave(),
         widget.repository.getSmartListEnabled(),
         widget.repository.getAdminModeEnabled(),
+        widget.repository.getAutoDailySaveEnabled(),
         widget.repository.getEffectiveDate(),
       ]);
 
@@ -111,7 +118,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         return;
       }
 
-      final effectiveDate = results[8] as DateTime;
+      final effectiveDate = results[10] as DateTime;
       final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
@@ -121,8 +128,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _accounts = results[3] as List<AccountModel>;
         _smartCategories = results[4] as List<SmartCategory>;
         _saveSuggestion = results[5] as SaveSuggestionModel;
-        _smartListEnabled = results[6] as bool;
-        _adminModeEnabled = results[7] as bool;
+        _dailySafeToSave = results[6] as DailySafeToSaveModel;
+        _smartListEnabled = results[7] as bool;
+        _adminModeEnabled = results[8] as bool;
+        _autoDailySaveEnabled = results[9] as bool;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
         _isLoading = false;
@@ -148,11 +157,16 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
         widget.repository.suggestEndOfMonthSave(),
+        widget.repository.fetchDailySafeToSave(),
+        widget.repository.getEffectiveDate(),
       ]);
 
       if (!mounted) {
         return;
       }
+
+      final effectiveDate = results[6] as DateTime;
+      final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
         _dashboard = results[0] as AiDashboardModel;
@@ -160,6 +174,9 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _transactions = results[2] as List<TransactionModel>;
         _accounts = results[3] as List<AccountModel>;
         _saveSuggestion = results[4] as SaveSuggestionModel;
+        _dailySafeToSave = results[5] as DailySafeToSaveModel;
+        _effectiveDate = effectiveDate;
+        _offsetDays = _offsetDays.clamp(0, maxDays);
       });
     } catch (error) {
       if (!mounted) {
@@ -664,6 +681,77 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     }
   }
 
+  Future<void> _toggleAutoDailySave(bool enabled) async {
+    if (_isTogglingAutoDailySave) {
+      return;
+    }
+
+    setState(() {
+      _isTogglingAutoDailySave = true;
+    });
+
+    try {
+      await widget.repository.setAutoDailySaveEnabled(enabled);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _autoDailySaveEnabled = enabled;
+      });
+      _showMessage(
+        enabled
+            ? 'Автоматический Safe-to-Save включен.'
+            : 'Автоматический Safe-to-Save выключен.',
+      );
+      await _refreshFinancialState();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTogglingAutoDailySave = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _simulateNextDay() async {
+    if (_isSimulateTickInFlight) {
+      return;
+    }
+
+    setState(() {
+      _isSimulateTickInFlight = true;
+    });
+    try {
+      final response = await widget.repository.simulateDay();
+      if (!mounted) {
+        return;
+      }
+
+      await _refreshFinancialState();
+      if (response.notification.isNotEmpty) {
+        _showMessage(response.notification);
+      }
+      widget.onDataChanged();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSimulateTickInFlight = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openAdminModeSheet() async {
     final accounts = _accounts;
     if (!_adminModeEnabled ||
@@ -772,6 +860,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final dashboard = _dashboard!;
     final analysis = _analysis!;
     final saveSuggestion = _saveSuggestion!;
+    final dailySafeToSave = _dailySafeToSave!;
     final transactions = _transactions!;
     final smartCategories = _smartCategories!;
     final scheduledPayments = dashboard.scheduledPayments;
@@ -821,6 +910,11 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                 spacing: 10,
                 runSpacing: 10,
                 children: <Widget>[
+                  ActionCircleButton(
+                    icon: Icons.skip_next_rounded,
+                    isLoading: _isSimulateTickInFlight,
+                    onTap: _simulateNextDay,
+                  ),
                   ActionCircleButton(
                     icon: _adminModeEnabled
                         ? Icons.manage_history_rounded
@@ -877,6 +971,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                     : AppTheme.accent,
               ),
             ],
+          ),
+          const SizedBox(height: 18),
+          _DailySafeToSaveCard(
+            preview: dailySafeToSave,
+            autoDailySaveEnabled: _autoDailySaveEnabled,
+            isBusy: _isTogglingAutoDailySave,
+            onToggle: _toggleAutoDailySave,
           ),
           const SizedBox(height: 18),
           _MonthAnalysisCard(summary: summary, title: summaryTitle),
@@ -1229,6 +1330,167 @@ class _AdminModeCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DailySafeToSaveCard extends StatelessWidget {
+  const _DailySafeToSaveCard({
+    required this.preview,
+    required this.autoDailySaveEnabled,
+    required this.isBusy,
+    required this.onToggle,
+  });
+
+  final DailySafeToSaveModel preview;
+  final bool autoDailySaveEnabled;
+  final bool isBusy;
+  final ValueChanged<bool> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final nextIncomeLabel = preview.nextIncomeDate == null
+        ? 'Дата дохода пока не определена'
+        : 'Следующий доход: ${AppDateFormatter.shortDate(preview.nextIncomeDate!)}';
+    final statusText = _statusLabel(preview);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Ежедневный Safe-to-Save',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      statusText,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.secondaryText,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Switch(
+                value: autoDailySaveEnabled,
+                onChanged: isBusy ? null : onToggle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            preview.suggestedAmount > 0
+                ? 'Сегодня можно отложить ${SomFormatter.amount(preview.suggestedAmount)}'
+                : 'Сегодня безопасный перевод в накопления не рекомендован',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: preview.suggestedAmount > 0 ? AppTheme.accent : Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            nextIncomeLabel,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.secondaryText,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceSoft,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: <Widget>[
+                _MetricChip(
+                  label: 'Текущий баланс',
+                  value: SomFormatter.amount(preview.currentBalance),
+                ),
+                _MetricChip(
+                  label: 'Платежи до дохода',
+                  value: SomFormatter.amount(preview.requiredPayments),
+                ),
+                _MetricChip(
+                  label: 'Буфер на жизнь',
+                  value: SomFormatter.amount(preview.lifeBuffer),
+                ),
+                _MetricChip(
+                  label: 'Безопасный остаток',
+                  value: SomFormatter.amount(preview.safeBalance),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _statusLabel(DailySafeToSaveModel preview) {
+    if (!preview.enabled) {
+      return 'Функция недоступна для текущего сценария.';
+    }
+    if (preview.daysToNextIncome > 0) {
+      return 'До следующего дохода ${preview.daysToNextIncome} дн. Статус: ${preview.status}.';
+    }
+    return 'Статус на сегодня: ${preview.status}.';
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppTheme.secondaryText,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

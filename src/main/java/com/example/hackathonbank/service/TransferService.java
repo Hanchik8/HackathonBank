@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -68,7 +70,7 @@ public class TransferService {
         String description = StringUtils.hasText(request.description())
                 ? request.description().trim()
                 : "Внутренний перевод";
-        executeTransfer(fromAccount, toAccount, request.amount(), description);
+        executeTransfer(userContextService.getCurrentUser(), fromAccount, toAccount, request.amount(), description, currentDateTime());
 
         return new TransferResponse(
                 "Перевод выполнен.",
@@ -127,7 +129,7 @@ public class TransferService {
     public ActionExecutionResult autoTransferFromSavings(BigDecimal amount) {
         Account savings = accountService.getAccountByType(AccountType.SAVINGS);
         Account main = accountService.getAccountByType(AccountType.MAIN);
-        executeTransfer(savings, main, amount, "AI резерв");
+        executeTransfer(userContextService.getCurrentUser(), savings, main, amount, "AI резерв", currentDateTime());
 
         return new ActionExecutionResult(
                 AgentActionType.AUTO_TRANSFER.name(),
@@ -137,15 +139,34 @@ public class TransferService {
         );
     }
 
-    private void executeTransfer(Account fromAccount, Account toAccount, BigDecimal amount, String description) {
+    @Transactional
+    public ActionExecutionResult autoSaveToSavings(User user, BigDecimal amount, LocalDate currentDate) {
+        Account main = accountRepository.findByUserIdAndType(user.getId(), AccountType.MAIN)
+                .orElseThrow(() -> new IllegalStateException("Основной счет не найден."));
+        Account savings = accountRepository.findByUserIdAndType(user.getId(), AccountType.SAVINGS)
+                .orElseThrow(() -> new IllegalStateException("Накопительный депозит не найден."));
+        executeTransfer(user, main, savings, amount, "Safe-to-Save", currentDate.atTime(8, 0));
+
+        return new ActionExecutionResult(
+                "AUTO_DAILY_SAVE",
+                "Safe-to-Save перевел %s KGS в накопительный депозит."
+                        .formatted(amount.setScale(2, RoundingMode.HALF_UP).toPlainString()),
+                main.getBalance(),
+                savings.getBalance()
+        );
+    }
+
+    private void executeTransfer(User user,
+                                 Account fromAccount,
+                                 Account toAccount,
+                                 BigDecimal amount,
+                                 String description,
+                                 LocalDateTime occurredAt) {
         validateAmount(fromAccount, amount);
 
         fromAccount.setBalance(fromAccount.getBalance().subtract(amount));
         toAccount.setBalance(toAccount.getBalance().add(amount));
         accountRepository.saveAll(List.of(fromAccount, toAccount));
-
-        User user = userContextService.getCurrentUser();
-        LocalDateTime now = currentDateTime();
 
         Transaction debit = new Transaction(
                 user,
@@ -158,7 +179,7 @@ public class TransferService {
                 "transfer",
                 TransactionType.TRANSFER,
                 TransactionStatus.COMPLETED,
-                now
+                occurredAt
         );
         Transaction credit = new Transaction(
                 user,
@@ -171,7 +192,7 @@ public class TransferService {
                 "transfer",
                 TransactionType.TRANSFER,
                 TransactionStatus.COMPLETED,
-                now.plusSeconds(1)
+                occurredAt.plusSeconds(1)
         );
         transactionRepository.saveAll(List.of(debit, credit));
     }

@@ -2,8 +2,10 @@ import '../contracts/dashboard_repository.dart';
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
+import '../models/daily_safe_to_save_model.dart';
 import '../models/save_suggestion_model.dart';
 import '../models/scheduled_payment_model.dart';
+import '../models/simulate_day_response_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/subscription_model.dart';
 import '../models/transaction_model.dart';
@@ -79,6 +81,16 @@ class MbankAdapter implements DashboardRepository {
       hasAlert: analysis.hasAlert,
       message: analysis.message,
       actionToken: analysis.actionToken,
+      suggestions: analysis.suggestions
+          .map(
+            (suggestion) => BalanceSuggestionModel(
+              id: suggestion.id,
+              title: suggestion.title,
+              description: suggestion.description,
+              actionToken: suggestion.actionToken,
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -278,6 +290,47 @@ class MbankAdapter implements DashboardRepository {
     );
   }
 
+  @override
+  Future<DailySafeToSaveModel> fetchDailySafeToSave() async {
+    final preview = await _client.getDailySafeToSave();
+    return DailySafeToSaveModel(
+      enabled: preview.enabled,
+      suggestedAmount: preview.suggestedAmount,
+      safeBalance: preview.safeBalance,
+      currentBalance: preview.currentBalance,
+      requiredPayments: preview.requiredPayments,
+      lifeBuffer: preview.lifeBuffer,
+      nextIncomeDate: preview.nextIncomeDate,
+      daysToNextIncome: preview.daysToNextIncome,
+      status: preview.status,
+    );
+  }
+
+  @override
+  Future<bool> getAutoDailySaveEnabled() {
+    // TODO: Confirm where MBank stores the auto Safe-to-Save switch.
+    return _client.getAutoDailySaveEnabled();
+  }
+
+  @override
+  Future<void> setAutoDailySaveEnabled(bool enabled) {
+    // TODO: Confirm the real MBank endpoint for auto Safe-to-Save.
+    return _client.setAutoDailySaveEnabled(enabled);
+  }
+
+  @override
+  Future<SimulateDayResponseModel> simulateDay() async {
+    final response = await _client.simulateDay();
+    return SimulateDayResponseModel(
+      currentDate: response.currentDate,
+      currentBalance: response.currentBalance,
+      savingsBalance: response.savingsBalance,
+      savedAmount: response.savedAmount,
+      autoSaveExecuted: response.autoSaveExecuted,
+      notification: response.notification,
+    );
+  }
+
   AccountModel _mapAccount(ExistingMbankAccount account) {
     return AccountModel(
       id: account.id,
@@ -466,6 +519,14 @@ abstract class ExistingMbankClient {
   });
 
   Future<ExistingMbankSaveSuggestion> suggestEndOfMonthSave();
+
+  Future<ExistingMbankDailySafeToSave> getDailySafeToSave();
+
+  Future<bool> getAutoDailySaveEnabled();
+
+  Future<void> setAutoDailySaveEnabled(bool enabled);
+
+  Future<ExistingMbankSimulateDayResponse> simulateDay();
 }
 
 class ExistingMbankSubscription {
@@ -637,17 +698,48 @@ class ExistingMbankAiAnalysis {
     required this.hasAlert,
     required this.message,
     required this.actionToken,
+    required this.suggestions,
   });
 
   final bool hasAlert;
   final String message;
   final String? actionToken;
+  final List<ExistingMbankBalanceSuggestion> suggestions;
 
   factory ExistingMbankAiAnalysis.fromJson(Map<String, dynamic> json) {
     return ExistingMbankAiAnalysis(
       hasAlert: json['hasAlert'] as bool? ?? false,
       message: json['message'] as String? ?? '',
       actionToken: json['actionToken'] as String?,
+      suggestions: _listFromJson(
+        json['suggestions'],
+        (item) => ExistingMbankBalanceSuggestion.fromJson(item),
+      ),
+    );
+  }
+}
+
+class ExistingMbankBalanceSuggestion {
+  const ExistingMbankBalanceSuggestion({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.actionToken,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String actionToken;
+
+  factory ExistingMbankBalanceSuggestion.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return ExistingMbankBalanceSuggestion(
+      id: json['id']?.toString() ?? '',
+      title: json['title'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      actionToken: json['actionToken'] as String? ?? '',
     );
   }
 }
@@ -761,6 +853,75 @@ class ExistingMbankSaveSuggestion {
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       reason: json['reason'] as String? ?? '',
       safetyReserve: (json['safetyReserve'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ExistingMbankDailySafeToSave {
+  const ExistingMbankDailySafeToSave({
+    required this.enabled,
+    required this.suggestedAmount,
+    required this.safeBalance,
+    required this.currentBalance,
+    required this.requiredPayments,
+    required this.lifeBuffer,
+    required this.nextIncomeDate,
+    required this.daysToNextIncome,
+    required this.status,
+  });
+
+  final bool enabled;
+  final double suggestedAmount;
+  final double safeBalance;
+  final double currentBalance;
+  final double requiredPayments;
+  final double lifeBuffer;
+  final DateTime? nextIncomeDate;
+  final int daysToNextIncome;
+  final String status;
+
+  factory ExistingMbankDailySafeToSave.fromJson(Map<String, dynamic> json) {
+    return ExistingMbankDailySafeToSave(
+      enabled: json['enabled'] as bool? ?? false,
+      suggestedAmount: (json['suggestedAmount'] as num?)?.toDouble() ?? 0.0,
+      safeBalance: (json['safeBalance'] as num?)?.toDouble() ?? 0.0,
+      currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+      requiredPayments: (json['requiredPayments'] as num?)?.toDouble() ?? 0.0,
+      lifeBuffer: (json['lifeBuffer'] as num?)?.toDouble() ?? 0.0,
+      nextIncomeDate: _dateFromJson(json['nextIncomeDate']),
+      daysToNextIncome: _intFromJson(json['daysToNextIncome']),
+      status: json['status'] as String? ?? '',
+    );
+  }
+}
+
+class ExistingMbankSimulateDayResponse {
+  const ExistingMbankSimulateDayResponse({
+    required this.currentDate,
+    required this.currentBalance,
+    required this.savingsBalance,
+    required this.savedAmount,
+    required this.autoSaveExecuted,
+    required this.notification,
+  });
+
+  final DateTime? currentDate;
+  final double currentBalance;
+  final double savingsBalance;
+  final double savedAmount;
+  final bool autoSaveExecuted;
+  final String notification;
+
+  factory ExistingMbankSimulateDayResponse.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return ExistingMbankSimulateDayResponse(
+      currentDate: _dateFromJson(json['currentDate']),
+      currentBalance: (json['currentBalance'] as num?)?.toDouble() ?? 0.0,
+      savingsBalance: (json['savingsBalance'] as num?)?.toDouble() ?? 0.0,
+      savedAmount: (json['savedAmount'] as num?)?.toDouble() ?? 0.0,
+      autoSaveExecuted: json['autoSaveExecuted'] as bool? ?? false,
+      notification: json['notification'] as String? ?? '',
     );
   }
 }

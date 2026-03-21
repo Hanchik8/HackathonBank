@@ -5,7 +5,9 @@ import com.example.hackathonbank.controller.dto.BooleanSettingRequest;
 import com.example.hackathonbank.controller.dto.BooleanSettingResponse;
 import com.example.hackathonbank.controller.dto.DateSettingRequest;
 import com.example.hackathonbank.controller.dto.DateSettingResponse;
+import com.example.hackathonbank.controller.dto.DemoSimulateDayResponse;
 import com.example.hackathonbank.controller.dto.TransactionResponse;
+import com.example.hackathonbank.service.DailySavingsService;
 import com.example.hackathonbank.service.TransactionService;
 import com.example.hackathonbank.service.UserSettingsService;
 import jakarta.validation.Valid;
@@ -22,11 +24,14 @@ public class DemoController {
 
     private final UserSettingsService userSettingsService;
     private final TransactionService transactionService;
+    private final DailySavingsService dailySavingsService;
 
     public DemoController(UserSettingsService userSettingsService,
-                          TransactionService transactionService) {
+                          TransactionService transactionService,
+                          DailySavingsService dailySavingsService) {
         this.userSettingsService = userSettingsService;
         this.transactionService = transactionService;
+        this.dailySavingsService = dailySavingsService;
     }
 
     @GetMapping("/admin-mode")
@@ -53,5 +58,10 @@ public class DemoController {
     public TransactionResponse adjustBalance(@PathVariable Long accountId,
                                              @Valid @RequestBody AccountAdjustmentRequest request) {
         return transactionService.adjustAccountBalance(accountId, request.delta(), request.title());
+    }
+
+    @PostMapping("/simulate-day")
+    public DemoSimulateDayResponse simulateDay() {
+        return dailySavingsService.simulateNextDayForCurrentUser();
     }
 }

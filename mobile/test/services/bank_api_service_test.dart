@@ -78,6 +78,18 @@ void main() {
           ],
           'scheduledPayments': <Map<String, dynamic>>[],
         },
+        '/ai/daily-safe-to-save': <String, dynamic>{
+          'enabled': true,
+          'suggestedAmount': 1800,
+          'safeBalance': 11200,
+          'currentBalance': 15000,
+          'requiredPayments': 2500,
+          'lifeBuffer': 3000,
+          'nextIncomeDate': '2026-03-20',
+          'daysToNextIncome': 8,
+          'status': 'READY',
+        },
+        '/ai/auto-daily-save': <String, dynamic>{'enabled': true},
       },
       <String, dynamic>{
         '/scheduled-payments': <String, dynamic>{
@@ -125,6 +137,15 @@ void main() {
           'amount': 3000,
         },
         '/subscriptions/sub-1/cancel': null,
+        '/ai/auto-daily-save': <String, dynamic>{'enabled': true},
+        '/demo/simulate-day': <String, dynamic>{
+          'currentDate': '2026-03-13',
+          'currentBalance': 13200,
+          'savingsBalance': 51800,
+          'savedAmount': 1800,
+          'autoSaveExecuted': true,
+          'notification': 'Safe-to-Save выполнил перевод 1 800 KGS.',
+        },
       },
     );
     final apiService = BankApiService(apiClient: fakeApiClient);
@@ -133,6 +154,8 @@ void main() {
     final transactions = await apiService.fetchTransactions();
     final subscriptions = await apiService.fetchSubscriptions();
     final dashboard = await apiService.fetchDashboard(7);
+    final dailySafeToSave = await apiService.fetchDailySafeToSave();
+    final autoDailySaveEnabled = await apiService.getAutoDailySaveEnabled();
     final createdPayment = await apiService.createScheduledPayment(
       accountId: 1,
       title: 'Internet',
@@ -155,19 +178,32 @@ void main() {
       iconKey: 'transfer',
       smartCategoryId: 'smart-transfer',
     );
+    final simulateResponse = await apiService.simulateDay();
     await apiService.cancelSubscription('sub-1');
+    await apiService.setAutoDailySaveEnabled(false);
 
     expect(accounts.single.currency, 'KGS');
     expect(transactions.single.category, 'Food');
     expect(subscriptions.single.title, 'MPlus');
     expect(subscriptions.single.currency, 'KGS');
     expect(dashboard.horizonDays, 7);
+    expect(dailySafeToSave.suggestedAmount, 1800);
+    expect(autoDailySaveEnabled, isTrue);
     expect(createdPayment.title, 'Internet');
     expect(createdPayment.isReminder, isTrue);
+    expect(simulateResponse.autoSaveExecuted, isTrue);
     expect(internalTransfer.toAccount?.name, 'Savings');
     expect(externalTransfer.recipientName, 'Aigerim');
     expect(
       fakeApiClient.postBodies['/subscriptions/sub-1/cancel'],
+      <String, dynamic>{},
+    );
+    expect(
+      fakeApiClient.postBodies['/ai/auto-daily-save'],
+      <String, dynamic>{'enabled': false},
+    );
+    expect(
+      fakeApiClient.postBodies['/demo/simulate-day'],
       <String, dynamic>{},
     );
     expect(

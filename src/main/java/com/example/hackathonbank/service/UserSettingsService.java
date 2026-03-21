@@ -3,6 +3,7 @@ package com.example.hackathonbank.service;
 import com.example.hackathonbank.model.User;
 import com.example.hackathonbank.model.UserSettings;
 import com.example.hackathonbank.repository.UserSettingsRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,18 @@ public class UserSettingsService {
     }
 
     @Transactional(readOnly = true)
+    public boolean isAutoDailySaveEnabled() {
+        return getSettings().isAutoDailySaveEnabled();
+    }
+
+    @Transactional
+    public boolean setAutoDailySaveEnabled(boolean enabled) {
+        UserSettings settings = getSettings();
+        settings.setAutoDailySaveEnabled(enabled);
+        return userSettingsRepository.save(settings).isAutoDailySaveEnabled();
+    }
+
+    @Transactional(readOnly = true)
     public LocalDate getEffectiveDate() {
         return getSettings().getEffectiveDate();
     }
@@ -74,8 +87,17 @@ public class UserSettingsService {
     public UserSettings getSettings() {
         User user = userContextService.getCurrentUser();
         return userSettingsRepository.findByUserId(user.getId())
-                .orElseGet(() -> userSettingsRepository.save(
-                        new UserSettings(user, true, false, LocalDate.now())
-                ));
+                .orElseGet(() -> createDefaultSettings(user));
+    }
+
+    private UserSettings createDefaultSettings(User user) {
+        try {
+            return userSettingsRepository.saveAndFlush(
+                    new UserSettings(user, true, false, LocalDate.now())
+            );
+        } catch (DataIntegrityViolationException exception) {
+            return userSettingsRepository.findByUserId(user.getId())
+                    .orElseThrow(() -> exception);
+        }
     }
 }

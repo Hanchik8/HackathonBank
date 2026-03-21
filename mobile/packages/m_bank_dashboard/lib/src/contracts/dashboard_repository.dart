@@ -1,8 +1,10 @@
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
+import '../models/daily_safe_to_save_model.dart';
 import '../models/scheduled_payment_model.dart';
 import '../models/save_suggestion_model.dart';
+import '../models/simulate_day_response_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/subscription_model.dart';
 import '../models/transaction_model.dart';
@@ -87,6 +89,14 @@ abstract class DashboardRepository {
   });
 
   Future<SaveSuggestionModel> suggestEndOfMonthSave();
+
+  Future<DailySafeToSaveModel> fetchDailySafeToSave();
+
+  Future<bool> getAutoDailySaveEnabled();
+
+  Future<void> setAutoDailySaveEnabled(bool enabled);
+
+  Future<SimulateDayResponseModel> simulateDay();
 
   Future<List<SubscriptionModel>> fetchSubscriptions();
 
