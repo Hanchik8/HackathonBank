@@ -5,6 +5,7 @@ import com.example.hackathonbank.controller.dto.ScheduledPaymentResponse;
 import com.example.hackathonbank.service.ScheduledPaymentService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,5 +31,10 @@ public class ScheduledPaymentController {
     @PostMapping
     public ScheduledPaymentResponse createScheduledPayment(@Valid @RequestBody ScheduledPaymentRequest request) {
         return scheduledPaymentService.createScheduledPayment(request);
+    }
+
+    @PostMapping("/{paymentId}/delete")
+    public void deleteScheduledPayment(@PathVariable Long paymentId) {
+        scheduledPaymentService.deleteScheduledPayment(paymentId);
     }
 }

@@ -6,6 +6,7 @@ import com.example.hackathonbank.ai.dto.ScheduledPaymentSnapshot;
 import com.example.hackathonbank.model.Account;
 import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.ScheduledPayment;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,32 +23,53 @@ public class ForecastService {
 
     private final AccountService accountService;
     private final ScheduledPaymentService scheduledPaymentService;
+    private final UserSettingsService userSettingsService;
 
-    public ForecastService(AccountService accountService, ScheduledPaymentService scheduledPaymentService) {
+    @Autowired
+    public ForecastService(AccountService accountService,
+                           ScheduledPaymentService scheduledPaymentService,
+                           UserSettingsService userSettingsService) {
         this.accountService = accountService;
         this.scheduledPaymentService = scheduledPaymentService;
+        this.userSettingsService = userSettingsService;
+    }
+
+    public ForecastService(AccountService accountService,
+                           ScheduledPaymentService scheduledPaymentService) {
+        this(accountService, scheduledPaymentService, null);
     }
 
     public AiDashboardResponse buildDashboard(int offsetDays) {
-        int horizonDays = Math.max(0, Math.min(offsetDays, 10));
+        int horizonDays = Math.max(0, offsetDays);
         Account mainAccount = accountService.getAccountByType(AccountType.MAIN);
         Account savingsAccount = accountService.getAccountByType(AccountType.SAVINGS);
         List<ScheduledPayment> pendingPayments = scheduledPaymentService.getPendingPayments();
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = currentDate();
         BigDecimal minimumProjectedBalance = mainAccount.getBalance();
         List<DashboardPoint> points = new ArrayList<>();
+        List<ScheduledPayment> paymentsInWindow = pendingPayments.stream()
+                .filter(payment -> !payment.getDueDate().isBefore(today))
+                .filter(payment -> !payment.getDueDate().isAfter(today.plusDays(horizonDays)))
+                .toList();
 
+        BigDecimal runningBalance = mainAccount.getBalance();
         for (int day = 0; day <= horizonDays; day++) {
             LocalDate targetDate = today.plusDays(day);
-            BigDecimal projectedBalance = mainAccount.getBalance().subtract(totalDueByDate(pendingPayments, targetDate));
-            if (projectedBalance.compareTo(minimumProjectedBalance) < 0) {
-                minimumProjectedBalance = projectedBalance;
+            if (day > 0) {
+                BigDecimal dailyOutflow = paymentsInWindow.stream()
+                        .filter(payment -> payment.getDueDate().isEqual(targetDate))
+                        .map(ScheduledPayment::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                runningBalance = runningBalance.subtract(dailyOutflow);
             }
-            points.add(new DashboardPoint(day, targetDate.toString(), targetDate.format(LABEL_FORMATTER), projectedBalance));
+            if (runningBalance.compareTo(minimumProjectedBalance) < 0) {
+                minimumProjectedBalance = runningBalance;
+            }
+            points.add(new DashboardPoint(day, targetDate.toString(), targetDate.format(LABEL_FORMATTER), runningBalance));
         }
 
-        List<ScheduledPaymentSnapshot> paymentSnapshots = pendingPayments.stream()
+        List<ScheduledPaymentSnapshot> paymentSnapshots = paymentsInWindow.stream()
                 .map(payment -> new ScheduledPaymentSnapshot(
                         payment.getId(),
                         payment.getAccount().getId(),
@@ -58,7 +80,8 @@ public class ForecastService {
                         payment.getIconKey(),
                         payment.getAmount(),
                         payment.getDueDate(),
-                        payment.getStatus().name()
+                        payment.getStatus().name(),
+                        payment.isReminder()
                 ))
                 .toList();
 
@@ -72,10 +95,7 @@ public class ForecastService {
         );
     }
 
-    private BigDecimal totalDueByDate(List<ScheduledPayment> pendingPayments, LocalDate targetDate) {
-        return pendingPayments.stream()
-                .filter(payment -> !payment.getDueDate().isAfter(targetDate))
-                .map(ScheduledPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    private LocalDate currentDate() {
+        return userSettingsService == null ? LocalDate.now() : userSettingsService.currentDate();
     }
 }

@@ -12,6 +12,17 @@ public record ExternalTransferRequest(
         @NotNull TransferRecipientType recipientType,
         @NotBlank String recipientName,
         @NotNull @DecimalMin("1.00") BigDecimal amount,
-        String description
+        String description,
+        String category,
+        String iconKey,
+        String smartCategoryId
 ) {
+
+    public ExternalTransferRequest(Long fromAccountId,
+                                   TransferRecipientType recipientType,
+                                   String recipientName,
+                                   BigDecimal amount,
+                                   String description) {
+        this(fromAccountId, recipientType, recipientName, amount, description, null, null, null);
+    }
 }

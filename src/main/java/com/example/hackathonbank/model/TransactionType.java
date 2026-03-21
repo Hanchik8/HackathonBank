@@ -5,5 +5,6 @@ public enum TransactionType {
     TRANSFER,
     QR_TRANSFER,
     PURCHASE,
-    AUTO_PAYMENT
+    AUTO_PAYMENT,
+    ADJUSTMENT
 }

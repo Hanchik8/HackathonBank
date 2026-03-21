@@ -76,6 +76,7 @@ public class DataSeederConfig {
                             "Аренда",
                             "home",
                             LocalDate.now().plusDays(4),
+                            true,
                             PaymentStatus.SCHEDULED
                     )
             );

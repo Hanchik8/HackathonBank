@@ -1,7 +1,6 @@
 package com.example.hackathonbank.controller.dto;
 
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -14,6 +13,16 @@ public record ScheduledPaymentRequest(
         String counterparty,
         @NotBlank String category,
         @NotNull @DecimalMin("1.00") BigDecimal amount,
-        @NotNull @FutureOrPresent LocalDate dueDate
+        @NotNull LocalDate dueDate,
+        Boolean isReminder
 ) {
+
+    public ScheduledPaymentRequest(Long accountId,
+                                   String title,
+                                   String counterparty,
+                                   String category,
+                                   BigDecimal amount,
+                                   LocalDate dueDate) {
+        this(accountId, title, counterparty, category, amount, dueDate, true);
+    }
 }
