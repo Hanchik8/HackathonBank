@@ -5,6 +5,7 @@ import com.example.hackathonbank.ai.dto.AiAnalyzeResponse;
 import com.example.hackathonbank.ai.dto.AiDashboardResponse;
 import com.example.hackathonbank.ai.dto.AiExecuteRequest;
 import com.example.hackathonbank.ai.dto.AiExecuteResponse;
+import com.example.hackathonbank.ai.dto.SaveSuggestionResponse;
 import com.example.hackathonbank.service.ForecastService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,5 +43,10 @@ public class AiController {
     @PostMapping("/execute")
     public AiExecuteResponse execute(@Valid @RequestBody AiExecuteRequest request) {
         return aiAnalysisService.execute(request);
+    }
+
+    @GetMapping("/save-suggestion")
+    public SaveSuggestionResponse saveSuggestion() {
+        return aiAnalysisService.suggestEndOfMonthSave();
     }
 }

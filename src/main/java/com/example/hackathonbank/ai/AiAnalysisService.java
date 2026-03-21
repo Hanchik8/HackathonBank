@@ -4,64 +4,64 @@ import com.example.hackathonbank.ai.dto.AiAnalyzeResponse;
 import com.example.hackathonbank.ai.dto.AiDashboardResponse;
 import com.example.hackathonbank.ai.dto.AiExecuteRequest;
 import com.example.hackathonbank.ai.dto.AiExecuteResponse;
+import com.example.hackathonbank.ai.dto.BalanceSuggestionResponse;
 import com.example.hackathonbank.ai.dto.EnrichmentSummary;
+import com.example.hackathonbank.ai.dto.SaveSuggestionResponse;
+import com.example.hackathonbank.model.Account;
 import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.ScheduledPayment;
 import com.example.hackathonbank.model.Transaction;
+import com.example.hackathonbank.model.TransactionStatus;
 import com.example.hackathonbank.service.AccountService;
 import com.example.hackathonbank.service.ForecastService;
 import com.example.hackathonbank.service.ScheduledPaymentService;
+import com.example.hackathonbank.service.SmartCategoryService;
 import com.example.hackathonbank.service.TransactionService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
+import com.example.hackathonbank.service.UserSettingsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class AiAnalysisService {
-
-    private static final Logger log = LoggerFactory.getLogger(AiAnalysisService.class);
 
     private final ForecastService forecastService;
     private final TransactionService transactionService;
     private final ScheduledPaymentService scheduledPaymentService;
     private final TransactionEnrichmentService transactionEnrichmentService;
-    private final PendingActionRegistry pendingActionRegistry;
     private final AccountService accountService;
     private final BankingAgentTools bankingAgentTools;
-    private final AiCapabilityService aiCapabilityService;
-    private final ChatClient aiChatClient;
-    private final AiCallExecutor aiCallExecutor;
+    private final UserSettingsService userSettingsService;
+    private final SmartCategoryService smartCategoryService;
 
     public AiAnalysisService(ForecastService forecastService,
                              TransactionService transactionService,
                              ScheduledPaymentService scheduledPaymentService,
                              TransactionEnrichmentService transactionEnrichmentService,
-                             PendingActionRegistry pendingActionRegistry,
                              AccountService accountService,
                              BankingAgentTools bankingAgentTools,
-                             AiCapabilityService aiCapabilityService,
-                             ChatClient aiChatClient,
-                             AiCallExecutor aiCallExecutor) {
+                             UserSettingsService userSettingsService,
+                             SmartCategoryService smartCategoryService) {
         this.forecastService = forecastService;
         this.transactionService = transactionService;
         this.scheduledPaymentService = scheduledPaymentService;
         this.transactionEnrichmentService = transactionEnrichmentService;
-        this.pendingActionRegistry = pendingActionRegistry;
         this.accountService = accountService;
         this.bankingAgentTools = bankingAgentTools;
-        this.aiCapabilityService = aiCapabilityService;
-        this.aiChatClient = aiChatClient;
-        this.aiCallExecutor = aiCallExecutor;
+        this.userSettingsService = userSettingsService;
+        this.smartCategoryService = smartCategoryService;
     }
 
     @Transactional(readOnly = true)
@@ -76,187 +76,416 @@ public class AiAnalysisService {
         );
 
         if (dashboard.minimumProjectedBalance().compareTo(BigDecimal.ZERO) >= 0) {
-            return new AiAnalyzeResponse(false, enrichmentSummary.reasoning(), null);
-        }
-
-        BigDecimal gapAmount = dashboard.minimumProjectedBalance().abs();
-        BigDecimal savingsBalance = accountService.getAccountByType(AccountType.SAVINGS).getBalance();
-        List<ScheduledPayment> riskyPayments = selectRiskyPayments(pendingPayments, dashboard.horizonDays());
-        ScheduledPayment criticalPayment = selectCriticalPayment(riskyPayments, dashboard.currentBalance());
-
-        PendingAiAction action;
-        if (savingsBalance.compareTo(gapAmount) >= 0) {
-            action = new PendingAiAction(
-                    UUID.randomUUID().toString(),
-                    AgentActionType.AUTO_TRANSFER,
-                    buildTransferMessage(gapAmount, criticalPayment, riskyPayments, enrichmentSummary),
-                    gapAmount,
-                    null,
-                    LocalDateTime.now()
-            );
-        } else if (criticalPayment != null) {
-            action = new PendingAiAction(
-                    UUID.randomUUID().toString(),
-                    AgentActionType.POSTPONE_PAYMENT,
-                    buildPostponeMessage(criticalPayment, riskyPayments, enrichmentSummary),
-                    null,
-                    criticalPayment.getId(),
-                    LocalDateTime.now()
-            );
-        } else {
             return new AiAnalyzeResponse(
-                    true,
-                    "Найден риск кассового разрыва, но подходящее действие не определено.",
-                    null
+                    false,
+                    normalizeReasoning(enrichmentSummary),
+                    null,
+                    List.of()
             );
         }
 
-        pendingActionRegistry.register(action);
-        return new AiAnalyzeResponse(true, action.message(), action.actionToken());
+        BigDecimal deficit = dashboard.minimumProjectedBalance().abs();
+        List<BalanceSuggestionResponse> suggestions = buildSuggestions(dashboard, deficit);
+        LocalDate horizonDate = userSettingsService.currentDate().plusDays(Math.max(0, offsetDays));
+        LocalDate deficitDate = firstNegativeDate(dashboard).orElse(horizonDate);
+        ScheduledPayment highlightedPayment = highestImpactPaymentBefore(deficitDate, offsetDays);
+        String message = suggestions.isEmpty()
+                ? "К %s ожидается дефицит %s. Подходящих действий не найдено.".formatted(shortDateLabel(deficitDate), money(deficit))
+                : "К %s ожидается дефицит %s. Ниже варианты, как закрыть разрыв.".formatted(shortDateLabel(deficitDate), money(deficit));
+        if (highlightedPayment != null) {
+            message = "%s Ключевой риск: платеж \"%s\" на %s."
+                    .formatted(message, highlightedPayment.getTitle(), money(highlightedPayment.getAmount()));
+        }
+        String actionToken = suggestions.isEmpty() ? null : suggestions.get(0).actionToken();
+
+        return new AiAnalyzeResponse(
+                true,
+                "%s %s".formatted(message, normalizeReasoning(enrichmentSummary)).trim(),
+                actionToken,
+                suggestions
+        );
     }
 
     @Transactional
     public AiExecuteResponse execute(AiExecuteRequest request) {
-        PendingAiAction action = pendingActionRegistry.require(request.actionToken());
-        ActionExecutionResult executionResult = executeApprovedAction(action);
-        pendingActionRegistry.remove(request.actionToken());
+        ActionExecutionResult result = executeActionToken(request.actionToken());
         return new AiExecuteResponse(
                 true,
-                executionResult.message(),
-                executionResult.currentBalance(),
-                executionResult.savingsBalance()
+                result.message(),
+                result.currentBalance(),
+                result.savingsBalance()
         );
     }
 
-    private ActionExecutionResult executeApprovedAction(PendingAiAction action) {
-        if (aiCapabilityService.isLiveAiEnabled()) {
-            try {
-                String message = aiCallExecutor.execute(() -> aiChatClient.prompt()
-                        .system("""
-                                Ты zero-click банковский агент исполнения.
-                                Пользователь уже подтвердил действие.
-                                Обязательно вызови ровно один подходящий инструмент и затем кратко подтверди результат на русском.
-                                """)
-                        .tools(bankingAgentTools)
-                        .user(executionPrompt(action))
-                        .call()
-                        .content());
+    @Transactional(readOnly = true)
+    public SaveSuggestionResponse suggestEndOfMonthSave() {
+        LocalDate currentDate = userSettingsService.currentDate();
+        Account main = accountService.getAccountByType(AccountType.MAIN);
+        LocalDate monthEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth());
+        BigDecimal scheduledOutflow = scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> payment.getAccount().getId().equals(main.getId()))
+                .filter(payment -> !payment.getDueDate().isBefore(currentDate))
+                .filter(payment -> !payment.getDueDate().isAfter(monthEnd))
+                .map(ScheduledPayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal reservedByBudgets = userSettingsService.isSmartListEnabled()
+                ? smartCategoryService.positiveRemainingReserve(currentDate)
+                : BigDecimal.ZERO;
+        BigDecimal safetyReserve = safetyReserve(main.getBalance());
+        BigDecimal freeAmount = main.getBalance()
+                .subtract(scheduledOutflow)
+                .subtract(reservedByBudgets)
+                .subtract(safetyReserve);
+        BigDecimal suggestionAmount = freeAmount.compareTo(BigDecimal.ZERO) <= 0
+                ? BigDecimal.ZERO
+                : floorToHundreds(freeAmount);
+        String reason = suggestionAmount.compareTo(BigDecimal.ZERO) <= 0
+                ? "Совет считается консервативно: из основного счета уже вычтены будущие списания до конца месяца, резерв Smart List и страховой резерв."
+                : "В накопительный депозит предлагается переводить только свободный остаток после учета будущих списаний, Smart List и страхового резерва.";
+        return new SaveSuggestionResponse(
+                suggestionAmount,
+                reason,
+                safetyReserve,
+                main.getBalance(),
+                scheduledOutflow,
+                reservedByBudgets,
+                freeAmount
+        );
+    }
 
-                return new ActionExecutionResult(
-                        action.actionType().name(),
-                        message == null || message.isBlank() ? fallbackExecutionMessage(action) : message,
-                        accountService.getAccountByType(AccountType.MAIN).getBalance(),
-                        accountService.getAccountByType(AccountType.SAVINGS).getBalance()
+    private List<BalanceSuggestionResponse> buildSuggestions(AiDashboardResponse dashboard, BigDecimal deficit) {
+        LinkedHashMap<String, BalanceSuggestionResponse> suggestions = new LinkedHashMap<>();
+        Account savings = accountService.getAccountByType(AccountType.SAVINGS);
+        List<ScheduledPayment> flexiblePayments = collectFlexiblePayments(dashboard.horizonDays());
+
+        if (savings.getBalance().compareTo(BigDecimal.ZERO) > 0) {
+            boolean covered = savings.getBalance().compareTo(deficit) >= 0;
+            BalanceSuggestionResponse suggestion = new BalanceSuggestionResponse(
+                    "close-deposit-%d".formatted(savings.getId()),
+                    covered ? "Закрыть депозит и закрыть разрыв" : "Закрыть депозит и сократить разрыв",
+                    covered
+                            ? "Закрытие накопительного депозита даст %s и полностью покроет дефицит %s."
+                            .formatted(money(savings.getBalance()), money(deficit))
+                            : "Закрытие накопительного депозита даст %s и сократит дефицит %s."
+                            .formatted(money(savings.getBalance()), money(deficit)),
+                    "CLOSE_DEPOSIT:%d".formatted(savings.getId())
+            );
+            suggestions.put(suggestion.actionToken(), suggestion);
+        }
+
+        ScheduledPayment singleCandidate = pickSinglePostponeCandidate(flexiblePayments, deficit);
+        if (singleCandidate != null) {
+            LocalDate targetDate = inferRecommendedPostponeDate(singleCandidate.getDueDate());
+            if (targetDate.isAfter(singleCandidate.getDueDate())) {
+                BigDecimal postponedAmount = singleCandidate.getAmount();
+                boolean covers = postponedAmount.compareTo(deficit) >= 0;
+                BalanceSuggestionResponse suggestion = new BalanceSuggestionResponse(
+                        "postpone-%d".formatted(singleCandidate.getId()),
+                        "Перенести платеж \"%s\"".formatted(singleCandidate.getTitle()),
+                        (covers
+                                ? "Сдвиг до %s освободит %s и полностью закроет разрыв."
+                                : "Сдвиг до %s освободит %s и уменьшит текущий разрыв.")
+                                .formatted(shortDateLabel(targetDate), money(postponedAmount)),
+                        "POSTPONE:%d:%s".formatted(singleCandidate.getId(), targetDate)
                 );
-            } catch (Exception exception) {
-                log.warn("Live tool execution failed, using direct execution: {}", exception.getMessage());
+                suggestions.put(suggestion.actionToken(), suggestion);
             }
         }
-        return directExecute(action);
+
+        List<ScheduledPayment> grouped = pickPaymentsForCoverage(flexiblePayments, deficit);
+        if (!grouped.isEmpty()) {
+            boolean duplicateSingleGroup = grouped.size() == 1
+                    && singleCandidate != null
+                    && grouped.get(0).getId().equals(singleCandidate.getId());
+            LocalDate latestDueDate = latestDueDate(grouped);
+            LocalDate targetDate = inferRecommendedPostponeDate(latestDueDate);
+            if (!duplicateSingleGroup && targetDate.isAfter(latestDueDate)) {
+                BigDecimal coveredAmount = grouped.stream()
+                        .map(ScheduledPayment::getAmount)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                String paymentIds = grouped.stream()
+                        .map(payment -> payment.getId().toString())
+                        .reduce((left, right) -> left + "," + right)
+                        .orElse("");
+                BalanceSuggestionResponse suggestion = new BalanceSuggestionResponse(
+                        "postpone-group-%s".formatted(paymentIds),
+                        grouped.size() == 1 ? "Перенести один гибкий платеж" : "Перенести группу платежей",
+                        "Перенос %d платежей до %s освободит %s и снизит нагрузку на баланс."
+                                .formatted(grouped.size(), shortDateLabel(targetDate), money(coveredAmount)),
+                        "POSTPONE_GROUP:%s:%s".formatted(paymentIds, targetDate)
+                );
+                suggestions.put(suggestion.actionToken(), suggestion);
+
+                if (savings.getBalance().compareTo(BigDecimal.ZERO) > 0
+                        && savings.getBalance().compareTo(deficit) < 0
+                        && savings.getBalance().add(coveredAmount).compareTo(deficit) >= 0) {
+                    BalanceSuggestionResponse combo = new BalanceSuggestionResponse(
+                            "combo-%d-%s".formatted(savings.getId(), paymentIds),
+                            "Комбинировать депозит и перенос",
+                            "Закройте депозит и перенесите %d платежей до %s, чтобы полностью убрать дефицит."
+                                    .formatted(grouped.size(), shortDateLabel(targetDate)),
+                            "CLOSE_DEPOSIT_AND_POSTPONE:%d:%s:%s"
+                                    .formatted(savings.getId(), paymentIds, targetDate)
+                    );
+                    suggestions.put(combo.actionToken(), combo);
+                }
+            }
+        }
+
+        return new ArrayList<>(suggestions.values());
     }
 
-    private ActionExecutionResult directExecute(PendingAiAction action) {
-        return switch (action.actionType()) {
-            case AUTO_TRANSFER -> bankingAgentTools.autoTransferFromSavings(action.amount().doubleValue());
-            case POSTPONE_PAYMENT -> bankingAgentTools.postponePayment(action.paymentId());
-        };
-    }
-
-    private String executionPrompt(PendingAiAction action) {
-        return switch (action.actionType()) {
-            case AUTO_TRANSFER ->
-                    "Подтвержденное действие: вызови autoTransferFromSavings с amount=%s и закрой кассовый разрыв."
-                            .formatted(action.amount().toPlainString());
-            case POSTPONE_PAYMENT ->
-                    "Подтвержденное действие: вызови postponePayment с paymentId=%d и перенеси критичный обязательный платеж."
-                            .formatted(action.paymentId());
-        };
-    }
-
-    private String fallbackExecutionMessage(PendingAiAction action) {
-        return switch (action.actionType()) {
-            case AUTO_TRANSFER -> "Перевод из сбережений выполнен.";
-            case POSTPONE_PAYMENT -> "Платеж перенесен.";
-        };
-    }
-
-    private List<ScheduledPayment> selectRiskyPayments(List<ScheduledPayment> pendingPayments, int horizonDays) {
-        LocalDate horizonDate = LocalDate.now().plusDays(Math.max(0, horizonDays));
-        return pendingPayments.stream()
-                .filter(payment -> !payment.getDueDate().isAfter(horizonDate))
-                .sorted(
-                        Comparator.comparing(ScheduledPayment::getDueDate)
-                                .thenComparing(ScheduledPayment::getAmount, Comparator.reverseOrder())
-                )
+    private List<ScheduledPayment> collectFlexiblePayments(int horizonDays) {
+        return paymentsInHorizon(horizonDays).stream()
+                .filter(this::isFlexiblePayment)
+                .sorted(Comparator.comparing(ScheduledPayment::getDueDate)
+                        .thenComparing(ScheduledPayment::getAmount, Comparator.reverseOrder()))
                 .toList();
     }
 
-    private ScheduledPayment selectCriticalPayment(List<ScheduledPayment> riskyPayments, BigDecimal currentBalance) {
-        if (riskyPayments.isEmpty()) {
+    private List<ScheduledPayment> paymentsInHorizon(int horizonDays) {
+        LocalDate currentDate = userSettingsService.currentDate();
+        LocalDate horizonDate = currentDate.plusDays(Math.max(0, horizonDays));
+        return scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> !payment.getDueDate().isBefore(currentDate))
+                .filter(payment -> !payment.getDueDate().isAfter(horizonDate))
+                .sorted(Comparator.comparing(ScheduledPayment::getDueDate)
+                        .thenComparing(ScheduledPayment::getAmount, Comparator.reverseOrder()))
+                .toList();
+    }
+
+    private ScheduledPayment highestImpactPaymentBefore(LocalDate deficitDate, int horizonDays) {
+        return paymentsInHorizon(horizonDays).stream()
+                .filter(payment -> !payment.getDueDate().isAfter(deficitDate))
+                .max(Comparator.comparing(ScheduledPayment::getAmount)
+                        .thenComparing(ScheduledPayment::getDueDate, Comparator.reverseOrder()))
+                .orElseGet(() -> paymentsInHorizon(horizonDays).stream()
+                        .max(Comparator.comparing(ScheduledPayment::getAmount)
+                                .thenComparing(ScheduledPayment::getDueDate, Comparator.reverseOrder()))
+                        .orElse(null));
+    }
+
+    private java.util.Optional<LocalDate> firstNegativeDate(AiDashboardResponse dashboard) {
+        return dashboard.points().stream()
+                .filter(point -> point.balance().compareTo(BigDecimal.ZERO) < 0)
+                .map(point -> LocalDate.parse(point.isoDate()))
+                .findFirst();
+    }
+
+    private ScheduledPayment pickSinglePostponeCandidate(List<ScheduledPayment> payments, BigDecimal deficit) {
+        return payments.stream()
+                .sorted((left, right) -> {
+                    int byAmount = right.getAmount().compareTo(left.getAmount());
+                    return byAmount != 0 ? byAmount : left.getDueDate().compareTo(right.getDueDate());
+                })
+                .filter(payment -> inferRecommendedPostponeDate(payment.getDueDate()).isAfter(payment.getDueDate()))
+                .filter(payment -> payment.getAmount().compareTo(deficit) >= 0)
+                .findFirst()
+                .orElseGet(() -> payments.stream()
+                        .filter(payment -> inferRecommendedPostponeDate(payment.getDueDate()).isAfter(payment.getDueDate()))
+                        .findFirst()
+                        .orElse(null));
+    }
+
+    private List<ScheduledPayment> pickPaymentsForCoverage(List<ScheduledPayment> payments, BigDecimal requiredAmount) {
+        List<ScheduledPayment> selected = new ArrayList<>();
+        BigDecimal covered = BigDecimal.ZERO;
+        for (ScheduledPayment payment : payments) {
+            selected.add(payment);
+            covered = covered.add(payment.getAmount());
+            if (covered.compareTo(requiredAmount) >= 0) {
+                break;
+            }
+        }
+        return selected;
+    }
+
+    private LocalDate inferRecommendedPostponeDate(LocalDate afterDate) {
+        LocalDate predicted = predictNextIncomeDate(afterDate);
+        if (predicted != null && predicted.isAfter(afterDate)) {
+            return predicted;
+        }
+        return afterDate.plusDays(7);
+    }
+
+    private LocalDate predictNextIncomeDate(LocalDate afterDate) {
+        LocalDate currentDate = userSettingsService.currentDate();
+        LocalDateTime periodStart = currentDate.minusDays(90).atStartOfDay();
+        LocalDateTime periodEnd = currentDate.atTime(23, 59, 59);
+        List<Transaction> incomes = transactionService.getTransactionsForCurrentUser().stream()
+                .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
+                .filter(transaction -> transaction.getAmount().compareTo(BigDecimal.ZERO) > 0)
+                .filter(transaction -> !transaction.getOccurredAt().isBefore(periodStart))
+                .filter(transaction -> !transaction.getOccurredAt().isAfter(periodEnd))
+                .sorted(Comparator.comparing(Transaction::getOccurredAt))
+                .toList();
+        if (incomes.isEmpty()) {
             return null;
         }
 
-        BigDecimal runningBalance = currentBalance;
-        ScheduledPayment latestCandidate = riskyPayments.get(0);
-        for (ScheduledPayment payment : riskyPayments) {
-            runningBalance = runningBalance.subtract(payment.getAmount());
-            latestCandidate = payment;
-            if (runningBalance.compareTo(BigDecimal.ZERO) < 0) {
-                return payment;
+        Map<Integer, IncomePattern> byDay = new LinkedHashMap<>();
+        for (Transaction income : incomes) {
+            int day = income.getOccurredAt().getDayOfMonth();
+            IncomePattern current = byDay.get(day);
+            byDay.put(day, current == null
+                    ? new IncomePattern(day, 1, income.getAmount())
+                    : new IncomePattern(day, current.occurrences() + 1, current.totalAmount().add(income.getAmount())));
+        }
+
+        LocalDate bestCandidate = byDay.values().stream()
+                .filter(pattern -> pattern.occurrences() >= 2)
+                .sorted(Comparator.comparing(IncomePattern::occurrences).reversed()
+                        .thenComparing(IncomePattern::totalAmount, Comparator.reverseOrder()))
+                .map(pattern -> nextOccurrence(afterDate, pattern.dayOfMonth()))
+                .filter(candidate -> candidate.isAfter(afterDate))
+                .min(LocalDate::compareTo)
+                .orElse(null);
+        if (bestCandidate != null) {
+            return bestCandidate;
+        }
+
+        if (incomes.size() >= 2) {
+            long totalInterval = 0;
+            for (int index = 1; index < incomes.size(); index++) {
+                totalInterval += Duration.between(
+                        incomes.get(index - 1).getOccurredAt(),
+                        incomes.get(index).getOccurredAt()
+                ).toDays();
+            }
+            long averageInterval = Math.round((double) totalInterval / (incomes.size() - 1));
+            if (averageInterval > 0) {
+                LocalDate candidate = incomes.get(incomes.size() - 1).getOccurredAt().toLocalDate();
+                while (!candidate.isAfter(afterDate)) {
+                    candidate = candidate.plusDays(averageInterval);
+                }
+                return candidate;
             }
         }
-        return latestCandidate;
+
+        return null;
     }
 
-    private String buildTransferMessage(BigDecimal gapAmount,
-                                        ScheduledPayment criticalPayment,
-                                        List<ScheduledPayment> riskyPayments,
-                                        EnrichmentSummary enrichmentSummary) {
-        String reasoning = normalizeReasoning(enrichmentSummary);
-        String paymentPart = criticalPayment == null
-                ? "В ближайшем горизонте есть обязательные списания, которые уводят основной счет в минус."
-                : "Критичное списание \"%s\" на %s KGS назначено на %s."
-                .formatted(
-                        criticalPayment.getTitle(),
-                        criticalPayment.getAmount().toPlainString(),
-                        criticalPayment.getDueDate()
-                );
-        String stackPart = summarizePayments(riskyPayments, criticalPayment);
-        return "%s %s %s Рекомендую перевести %s KGS со счета сбережений."
-                .formatted(paymentPart, stackPart, reasoning, gapAmount.toPlainString())
-                .trim();
-    }
-
-    private String buildPostponeMessage(ScheduledPayment criticalPayment,
-                                        List<ScheduledPayment> riskyPayments,
-                                        EnrichmentSummary enrichmentSummary) {
-        String reasoning = normalizeReasoning(enrichmentSummary);
-        String stackPart = summarizePayments(riskyPayments, criticalPayment);
-        return "Подушки на счете сбережений уже недостаточно, чтобы покрыть \"%s\" на %s KGS. %s %s Рекомендую перенести именно этот платеж."
-                .formatted(
-                        criticalPayment.getTitle(),
-                        criticalPayment.getAmount().toPlainString(),
-                        stackPart,
-                        reasoning
-                )
-                .trim();
-    }
-
-    private String summarizePayments(List<ScheduledPayment> riskyPayments, ScheduledPayment criticalPayment) {
-        List<ScheduledPayment> supportingPayments = riskyPayments.stream()
-                .filter(payment -> criticalPayment == null || !payment.getId().equals(criticalPayment.getId()))
-                .limit(2)
-                .toList();
-        if (supportingPayments.isEmpty()) {
-            return "";
+    private ActionExecutionResult executeActionToken(String actionToken) {
+        if (actionToken == null || actionToken.isBlank()) {
+            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
         }
-        String summary = supportingPayments.stream()
-                .map(payment -> "\"%s\" %s KGS %s".formatted(
-                        payment.getTitle(),
-                        payment.getAmount().toPlainString(),
-                        payment.getDueDate()))
-                .collect(Collectors.joining(", "));
-        return "Следом идут: %s.".formatted(summary);
+
+        String[] parts = actionToken.split(":");
+        return switch (parts[0]) {
+            case "CLOSE_DEPOSIT" -> closeDeposit();
+            case "POSTPONE" -> postponeSingle(parts);
+            case "POSTPONE_GROUP" -> postponeGroup(parts);
+            case "CLOSE_DEPOSIT_AND_POSTPONE" -> closeDepositAndPostpone(parts);
+            default -> throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+        };
+    }
+
+    private ActionExecutionResult closeDeposit() {
+        Account savings = accountService.getAccountByType(AccountType.SAVINGS);
+        return bankingAgentTools.autoTransferFromSavings(savings.getBalance().doubleValue());
+    }
+
+    private ActionExecutionResult postponeSingle(String[] parts) {
+        if (parts.length < 3) {
+            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+        }
+        Long paymentId = Long.parseLong(parts[1]);
+        LocalDate targetDate = resolveTargetDate(parts[2], paymentDateById(paymentId));
+        return scheduledPaymentService.postponePaymentTo(paymentId, targetDate);
+    }
+
+    private ActionExecutionResult postponeGroup(String[] parts) {
+        if (parts.length < 3) {
+            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+        }
+        List<Long> paymentIds = parsePaymentIds(parts[1]);
+        LocalDate targetDate = resolveTargetDate(parts[2], latestPaymentDate(paymentIds));
+        return scheduledPaymentService.postponePaymentsTo(paymentIds, targetDate);
+    }
+
+    private ActionExecutionResult closeDepositAndPostpone(String[] parts) {
+        if (parts.length < 4) {
+            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+        }
+        closeDeposit();
+        List<Long> paymentIds = parsePaymentIds(parts[2]);
+        LocalDate targetDate = resolveTargetDate(parts[3], latestPaymentDate(paymentIds));
+        return scheduledPaymentService.postponePaymentsTo(paymentIds, targetDate);
+    }
+
+    private List<Long> parsePaymentIds(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(rawValue.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(Long::parseLong)
+                .toList();
+    }
+
+    private LocalDate resolveTargetDate(String targetSpec, LocalDate referenceDate) {
+        try {
+            return referenceDate.plusDays(Long.parseLong(targetSpec));
+        } catch (NumberFormatException ignored) {
+            return LocalDate.parse(targetSpec);
+        }
+    }
+
+    private LocalDate paymentDateById(Long paymentId) {
+        return scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> payment.getId().equals(paymentId))
+                .map(ScheduledPayment::getDueDate)
+                .findFirst()
+                .orElse(userSettingsService.currentDate());
+    }
+
+    private LocalDate latestPaymentDate(List<Long> paymentIds) {
+        return scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> paymentIds.contains(payment.getId()))
+                .map(ScheduledPayment::getDueDate)
+                .max(LocalDate::compareTo)
+                .orElse(userSettingsService.currentDate());
+    }
+
+    private LocalDate latestDueDate(List<ScheduledPayment> payments) {
+        return payments.stream()
+                .map(ScheduledPayment::getDueDate)
+                .max(LocalDate::compareTo)
+                .orElse(userSettingsService.currentDate());
+    }
+
+    private LocalDate nextOccurrence(LocalDate after, int dayOfMonth) {
+        LocalDate monthStart = after.withDayOfMonth(1);
+        List<LocalDate> candidates = List.of(
+                safeDate(monthStart.getYear(), monthStart.getMonthValue(), dayOfMonth),
+                safeDate(monthStart.plusMonths(1).getYear(), monthStart.plusMonths(1).getMonthValue(), dayOfMonth),
+                safeDate(monthStart.plusMonths(2).getYear(), monthStart.plusMonths(2).getMonthValue(), dayOfMonth)
+        );
+        return candidates.stream()
+                .filter(candidate -> candidate.isAfter(after))
+                .findFirst()
+                .orElse(candidates.get(candidates.size() - 1));
+    }
+
+    private LocalDate safeDate(int year, int month, int dayOfMonth) {
+        LocalDate monthStart = LocalDate.of(year, month, 1);
+        int safeDay = Math.min(dayOfMonth, monthStart.lengthOfMonth());
+        return LocalDate.of(year, month, safeDay);
+    }
+
+    private boolean isFlexiblePayment(ScheduledPayment payment) {
+        String normalized = (payment.getTitle() + " " + payment.getCategory()).toLowerCase(Locale.ROOT);
+        return !containsAny(normalized, "аренд", "коммун", "кредит", "налог", "штраф");
+    }
+
+    private boolean containsAny(String value, String... candidates) {
+        for (String candidate : candidates) {
+            if (value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String normalizeReasoning(EnrichmentSummary enrichmentSummary) {
@@ -264,5 +493,46 @@ public class AiAnalysisService {
             return "Регулярные расходы и запланированные списания создают риск кассового разрыва.";
         }
         return enrichmentSummary.reasoning();
+    }
+
+    private BigDecimal safetyReserve(BigDecimal balance) {
+        BigDecimal reserve = balance.multiply(new BigDecimal("0.15"));
+        if (reserve.compareTo(new BigDecimal("3000")) < 0) {
+            return new BigDecimal("3000.00");
+        }
+        if (reserve.compareTo(new BigDecimal("15000")) > 0) {
+            return new BigDecimal("15000.00");
+        }
+        return reserve.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal floorToHundreds(BigDecimal amount) {
+        return amount.divide(new BigDecimal("100"), 0, RoundingMode.DOWN)
+                .multiply(new BigDecimal("100"))
+                .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private String money(BigDecimal amount) {
+        return amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " KGS";
+    }
+
+    private String shortDateLabel(LocalDate value) {
+        return "%d %s".formatted(value.getDayOfMonth(), switch (value.getMonthValue()) {
+            case 1 -> "янв.";
+            case 2 -> "фев.";
+            case 3 -> "мар.";
+            case 4 -> "апр.";
+            case 5 -> "мая";
+            case 6 -> "июн.";
+            case 7 -> "июл.";
+            case 8 -> "авг.";
+            case 9 -> "сент.";
+            case 10 -> "окт.";
+            case 11 -> "нояб.";
+            default -> "дек.";
+        });
+    }
+
+    private record IncomePattern(int dayOfMonth, int occurrences, BigDecimal totalAmount) {
     }
 }

@@ -13,6 +13,7 @@ public record ScheduledPaymentSnapshot(
         String iconKey,
         BigDecimal amount,
         LocalDate dueDate,
-        String status
+        String status,
+        boolean isReminder
 ) {
 }
