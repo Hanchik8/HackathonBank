@@ -98,19 +98,6 @@ public class SmartCategoryService {
                 .orElseThrow(() -> new IllegalArgumentException("Smart-категория не найдена."));
     }
 
-    @Transactional(readOnly = true)
-    public BigDecimal positiveRemainingReserve(LocalDate currentDate) {
-        LocalDateTime windowStart = currentDate.withDayOfMonth(1).atStartOfDay();
-        LocalDateTime windowEnd = currentDate.atTime(23, 59, 59);
-        Map<Long, BigDecimal> spentByCategory = loadSpentByCategory(windowStart, windowEnd);
-
-        return smartCategoryRepository.findByUserIdOrderByIdAsc(userContextService.getCurrentUser().getId())
-                .stream()
-                .map(category -> toResponse(category, spentByCategory.getOrDefault(category.getId(), BigDecimal.ZERO)).remaining())
-                .filter(remaining -> remaining.compareTo(BigDecimal.ZERO) > 0)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
     private SmartCategoryResponse toResponse(SmartCategory category, BigDecimal spent) {
         return new SmartCategoryResponse(
                 category.getId(),

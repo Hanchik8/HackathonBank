@@ -3,7 +3,6 @@ import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
 import '../models/daily_safe_to_save_model.dart';
-import '../models/save_suggestion_model.dart';
 import '../models/scheduled_payment_model.dart';
 import '../models/simulate_day_response_model.dart';
 import '../models/smart_category_model.dart';
@@ -281,16 +280,6 @@ class MbankAdapter implements DashboardRepository {
   }
 
   @override
-  Future<SaveSuggestionModel> suggestEndOfMonthSave() async {
-    final suggestion = await _client.suggestEndOfMonthSave();
-    return SaveSuggestionModel(
-      amount: suggestion.amount,
-      reason: suggestion.reason,
-      safetyReserve: suggestion.safetyReserve,
-    );
-  }
-
-  @override
   Future<DailySafeToSaveModel> fetchDailySafeToSave() async {
     final preview = await _client.getDailySafeToSave();
     return DailySafeToSaveModel(
@@ -517,8 +506,6 @@ abstract class ExistingMbankClient {
     required double delta,
     required String title,
   });
-
-  Future<ExistingMbankSaveSuggestion> suggestEndOfMonthSave();
 
   Future<ExistingMbankDailySafeToSave> getDailySafeToSave();
 
@@ -833,26 +820,6 @@ class ExistingMbankSmartCategory {
       plannedMonthly: (json['plannedMonthly'] as num?)?.toDouble() ?? 0.0,
       remaining: (json['remaining'] as num?)?.toDouble() ?? 0.0,
       isFavorite: json['isFavorite'] as bool? ?? false,
-    );
-  }
-}
-
-class ExistingMbankSaveSuggestion {
-  const ExistingMbankSaveSuggestion({
-    required this.amount,
-    required this.reason,
-    required this.safetyReserve,
-  });
-
-  final double amount;
-  final String reason;
-  final double safetyReserve;
-
-  factory ExistingMbankSaveSuggestion.fromJson(Map<String, dynamic> json) {
-    return ExistingMbankSaveSuggestion(
-      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      reason: json['reason'] as String? ?? '',
-      safetyReserve: (json['safetyReserve'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

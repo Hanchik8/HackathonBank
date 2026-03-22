@@ -1,7 +1,6 @@
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
-import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
 import 'api_client.dart';
@@ -392,39 +391,6 @@ class MockDataProvider {
       message: message,
       actionToken: suggestions.isEmpty ? null : suggestions.first.actionToken,
       suggestions: suggestions,
-    );
-  }
-
-  static SaveSuggestionModel computeSuggestedSave() {
-    final trackedAccount = _pickTrackedAccount();
-    final today = _today();
-    final monthEnd = _monthEnd(today);
-    final scheduledOutflow = _scheduledPayments
-        .where((payment) => payment.accountId == trackedAccount.id)
-        .where((payment) => !payment.dueDate.isBefore(today))
-        .where((payment) => !payment.dueDate.isAfter(monthEnd))
-        .fold<double>(0.0, (sum, payment) => sum + payment.amount);
-    final reservedByBudgets = smartListEnabled
-        ? _buildSmartCategories().fold<double>(
-            0.0,
-            (sum, category) =>
-                sum + (category.remaining > 0 ? category.remaining : 0),
-          )
-        : 0.0;
-    final safetyReserve = (trackedAccount.balance * 0.15).clamp(3000.0, 15000.0);
-    final freeAmount =
-        trackedAccount.balance - scheduledOutflow - reservedByBudgets - safetyReserve;
-    final suggestionAmount = freeAmount <= 0
-        ? 0.0
-        : (freeAmount / 100).floorToDouble() * 100;
-    final reason = suggestionAmount <= 0
-        ? 'До конца месяца свободного остатка нет: оставьте деньги на обязательные списания.'
-        : 'Можно безопасно отложить часть остатка: ближайшие платежи и лимиты категорий уже учтены.';
-
-    return SaveSuggestionModel(
-      amount: suggestionAmount,
-      reason: reason,
-      safetyReserve: safetyReserve,
     );
   }
 

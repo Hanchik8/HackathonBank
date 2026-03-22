@@ -7,7 +7,6 @@ import 'package:m_bank_dashboard/m_bank_dashboard.dart'
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
-import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
 import '../models/transfer_result_model.dart';
@@ -299,12 +298,6 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return TransactionModel.fromJson(json);
-  }
-
-  Future<SaveSuggestionModel> suggestEndOfMonthSave() async {
-    final json =
-        await _apiClient.getJson('/ai/save-suggestion') as Map<String, dynamic>;
-    return SaveSuggestionModel.fromJson(json);
   }
 
   Future<DailySafeToSaveModel> fetchDailySafeToSave() async {

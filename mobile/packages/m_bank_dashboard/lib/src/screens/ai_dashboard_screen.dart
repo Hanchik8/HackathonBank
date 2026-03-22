@@ -5,7 +5,6 @@ import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
 import '../models/daily_safe_to_save_model.dart';
-import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
 import '../theme/app_date_formatter.dart';
@@ -25,6 +24,7 @@ import '../widgets/smart_category_form_sheet.dart';
 import '../widgets/smart_list_card.dart';
 import '../widgets/transaction_capture_sheet.dart';
 import '../widgets/upcoming_payments_card.dart';
+import 'detailed_analytics_screen.dart';
 
 class AiDashboardScreen extends StatefulWidget {
   const AiDashboardScreen({
@@ -43,9 +43,23 @@ class AiDashboardScreen extends StatefulWidget {
 }
 
 class _AiDashboardScreenState extends State<AiDashboardScreen> {
+  static const List<String> _monthTitles = <String>[
+    'январь',
+    'февраль',
+    'март',
+    'апрель',
+    'май',
+    'июнь',
+    'июль',
+    'август',
+    'сентябрь',
+    'октябрь',
+    'ноябрь',
+    'декабрь',
+  ];
+
   AiDashboardModel? _dashboard;
   AiAnalysisModel? _analysis;
-  SaveSuggestionModel? _saveSuggestion;
   DailySafeToSaveModel? _dailySafeToSave;
   List<TransactionModel>? _transactions;
   List<AccountModel>? _accounts;
@@ -106,7 +120,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
         widget.repository.fetchSmartCategories(),
-        widget.repository.suggestEndOfMonthSave(),
         widget.repository.fetchDailySafeToSave(),
         widget.repository.getSmartListEnabled(),
         widget.repository.getAdminModeEnabled(),
@@ -118,7 +131,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         return;
       }
 
-      final effectiveDate = results[10] as DateTime;
+      final effectiveDate = results[9] as DateTime;
       final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
@@ -127,11 +140,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _transactions = results[2] as List<TransactionModel>;
         _accounts = results[3] as List<AccountModel>;
         _smartCategories = results[4] as List<SmartCategory>;
-        _saveSuggestion = results[5] as SaveSuggestionModel;
-        _dailySafeToSave = results[6] as DailySafeToSaveModel;
-        _smartListEnabled = results[7] as bool;
-        _adminModeEnabled = results[8] as bool;
-        _autoDailySaveEnabled = results[9] as bool;
+        _dailySafeToSave = results[5] as DailySafeToSaveModel;
+        _smartListEnabled = results[6] as bool;
+        _adminModeEnabled = results[7] as bool;
+        _autoDailySaveEnabled = results[8] as bool;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
         _isLoading = false;
@@ -156,7 +168,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         widget.repository.analyzeCashFlow(requestOffset),
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
-        widget.repository.suggestEndOfMonthSave(),
         widget.repository.fetchDailySafeToSave(),
         widget.repository.getEffectiveDate(),
       ]);
@@ -165,7 +176,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         return;
       }
 
-      final effectiveDate = results[6] as DateTime;
+      final effectiveDate = results[5] as DateTime;
       final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
@@ -173,8 +184,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _analysis = results[1] as AiAnalysisModel;
         _transactions = results[2] as List<TransactionModel>;
         _accounts = results[3] as List<AccountModel>;
-        _saveSuggestion = results[4] as SaveSuggestionModel;
-        _dailySafeToSave = results[5] as DailySafeToSaveModel;
+        _dailySafeToSave = results[4] as DailySafeToSaveModel;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
       });
@@ -188,12 +198,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
   Future<void> _refreshSmartListState({
     bool includeSettings = false,
-    bool includeSaveSuggestion = true,
   }) async {
     try {
       final futures = <Future<dynamic>>[
         widget.repository.fetchSmartCategories(),
-        if (includeSaveSuggestion) widget.repository.suggestEndOfMonthSave(),
         if (includeSettings) widget.repository.getSmartListEnabled(),
       ];
       final results = await Future.wait<dynamic>(futures);
@@ -204,18 +212,12 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
       var index = 0;
       final categories = results[index++] as List<SmartCategory>;
-      final suggestion = includeSaveSuggestion
-          ? results[index++] as SaveSuggestionModel
-          : _saveSuggestion;
       final smartListEnabled = includeSettings
           ? results[index] as bool
           : _smartListEnabled;
 
       setState(() {
         _smartCategories = categories;
-        if (includeSaveSuggestion && suggestion != null) {
-          _saveSuggestion = suggestion;
-        }
         _smartListEnabled = smartListEnabled;
       });
     } catch (error) {
@@ -600,7 +602,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       }
 
       widget.onDataChanged();
-      await _refreshSmartListState(includeSaveSuggestion: false);
+      await _refreshSmartListState();
     } catch (error) {
       if (!mounted) {
         return;
@@ -765,10 +767,8 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => AdminModeSheet(
-        accounts: accounts,
-        effectiveDate: _effectiveDate,
-      ),
+      builder: (context) =>
+          AdminModeSheet(accounts: accounts, effectiveDate: _effectiveDate),
     );
 
     if (action == null) {
@@ -835,7 +835,9 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -859,7 +861,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
     final dashboard = _dashboard!;
     final analysis = _analysis!;
-    final saveSuggestion = _saveSuggestion!;
     final dailySafeToSave = _dailySafeToSave!;
     final transactions = _transactions!;
     final smartCategories = _smartCategories!;
@@ -868,10 +869,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final reminderCount = scheduledPayments
         .where((payment) => payment.isReminder)
         .length;
-    final nearestPayment = scheduledPayments.isEmpty ? null : scheduledPayments.first;
-    final summaryTitle = dashboard.points.isEmpty
-        ? 'Последние 30 дней'
-        : 'Окно до ${dashboard.points.last.label}';
+    final nearestPayment = scheduledPayments.isEmpty
+        ? null
+        : scheduledPayments.first;
+    final summaryTitle = _summaryTitle(_offsetDays);
     final maxDays = _daysUntilEndOfMonth();
     final sliderMax = maxDays <= 0 ? 1 : maxDays;
     final sliderValue = _offsetDays.clamp(0, sliderMax).toDouble();
@@ -890,9 +891,8 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                   children: <Widget>[
                     Text(
                       'Финансовый анализ',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -980,7 +980,33 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             onToggle: _toggleAutoDailySave,
           ),
           const SizedBox(height: 18),
-          _MonthAnalysisCard(summary: summary, title: summaryTitle),
+          _MonthAnalysisCard(
+            summary: summary,
+            title: summaryTitle,
+            onTap: () => Navigator.of(context).push(
+              PageRouteBuilder<void>(
+                pageBuilder: (routeContext, animation, secondaryAnimation) =>
+                    DetailedAnalyticsScreen(
+                      transactions: _transactions ?? const <TransactionModel>[],
+                    ),
+                transitionsBuilder:
+                    (routeContext, animation, secondaryAnimation, child) =>
+                        SlideTransition(
+                          position:
+                              Tween<Offset>(
+                                begin: const Offset(0, 1),
+                                end: Offset.zero,
+                              ).animate(
+                                CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOut,
+                                ),
+                              ),
+                          child: child,
+                        ),
+              ),
+            ),
+          ),
           const SizedBox(height: 18),
           _BreakdownCard(summary: summary),
           if (analysis.hasAlert) ...<Widget>[
@@ -1036,8 +1062,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
               ),
             ),
           const SizedBox(height: 18),
-          _SaveSuggestionCard(suggestion: saveSuggestion),
-          const SizedBox(height: 18),
           UpcomingPaymentsCard(
             payments: scheduledPayments,
             referenceDate: _effectiveDate,
@@ -1067,12 +1091,15 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     List<TransactionModel> transactions,
     int offsetDays,
   ) {
-    final referenceDate = _dateOnly(_effectiveDate).add(Duration(days: offsetDays));
+    final referenceDate = _dateOnly(
+      _effectiveDate,
+    ).add(Duration(days: offsetDays));
     final windowStart = DateTime(referenceDate.year, referenceDate.month, 1);
-    final completedTransactions = transactions
-        .where((transaction) => transaction.status == 'COMPLETED')
-        .toList(growable: false)
-      ..sort((left, right) => right.occurredAt.compareTo(left.occurredAt));
+    final completedTransactions =
+        transactions
+            .where((transaction) => transaction.status == 'COMPLETED')
+            .toList(growable: false)
+          ..sort((left, right) => right.occurredAt.compareTo(left.occurredAt));
     final windowTransactions = completedTransactions
         .where(
           (transaction) =>
@@ -1089,19 +1116,34 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         .fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
     final expenses = relevantTransactions
         .where((transaction) => transaction.amount < 0)
-        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount.abs());
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + transaction.amount.abs(),
+        );
     final qr = relevantTransactions
         .where((transaction) => transaction.type == 'QR_TRANSFER')
-        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount.abs());
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + transaction.amount.abs(),
+        );
     final transfers = relevantTransactions
         .where((transaction) => transaction.type == 'TRANSFER')
-        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount.abs());
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + transaction.amount.abs(),
+        );
     final shopping = relevantTransactions
         .where((transaction) => transaction.iconKey == 'shopping')
-        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount.abs());
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + transaction.amount.abs(),
+        );
     final restaurants = relevantTransactions
         .where((transaction) => transaction.iconKey == 'food')
-        .fold<double>(0.0, (sum, transaction) => sum + transaction.amount.abs());
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + transaction.amount.abs(),
+        );
 
     return _AnalysisSummary(
       income: income,
@@ -1111,6 +1153,17 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       shopping: shopping,
       restaurants: restaurants,
     );
+  }
+
+  String _summaryTitle(int offsetDays) {
+    final referenceDate = _dateOnly(
+      _effectiveDate,
+    ).add(Duration(days: offsetDays));
+    return 'За ${_monthLabel(referenceDate.month)}';
+  }
+
+  String _monthLabel(int month) {
+    return _monthTitles[month - 1];
   }
 
   int _daysUntil(DateTime dueDate) {
@@ -1187,19 +1240,19 @@ class _ForecastCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       'Прогноз баланса',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       SomFormatter.amount(dashboard.minimumProjectedBalance),
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        color: dashboard.minimumProjectedBalance < 0
-                            ? Colors.white
-                            : AppTheme.accent,
-                        fontWeight: FontWeight.w900,
-                      ),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: dashboard.minimumProjectedBalance < 0
+                                ? Colors.white
+                                : AppTheme.accent,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                   ],
                 ),
@@ -1215,9 +1268,9 @@ class _ForecastCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Машина времени',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           Slider(
             min: 0,
@@ -1230,9 +1283,9 @@ class _ForecastCard extends StatelessWidget {
           ),
           Text(
             'Горизонт до конца месяца: $maxDays дн.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppTheme.secondaryText,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
           ),
           const SizedBox(height: 6),
           Row(
@@ -1240,15 +1293,15 @@ class _ForecastCard extends StatelessWidget {
             children: <Widget>[
               Text(
                 '0 дн.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.secondaryText,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
               ),
               Text(
                 '$maxDays дн.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppTheme.secondaryText,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
               ),
             ],
           ),
@@ -1281,7 +1334,9 @@ class _AdminModeCard extends StatelessWidget {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: enabled ? AppTheme.accent.withValues(alpha: 0.25) : Colors.white10,
+          color: enabled
+              ? AppTheme.accent.withValues(alpha: 0.25)
+              : Colors.white10,
         ),
       ),
       child: Column(
@@ -1295,9 +1350,8 @@ class _AdminModeCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       'Режим Админа',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -1326,7 +1380,9 @@ class _AdminModeCard extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: isBusy ? null : onOpen,
                 icon: const Icon(Icons.tune_rounded),
-                label: Text(isBusy ? 'Применение...' : 'Изменить дату и баланс'),
+                label: Text(
+                  isBusy ? 'Применение...' : 'Изменить дату и баланс',
+                ),
               ),
             ),
           ],
@@ -1373,9 +1429,8 @@ class _DailySafeToSaveCard extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       'Ежедневный Safe-to-Save',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -1401,16 +1456,18 @@ class _DailySafeToSaveCard extends StatelessWidget {
                 ? 'Сегодня можно отложить ${SomFormatter.amount(preview.suggestedAmount)}'
                 : 'Сегодня безопасный перевод в накопления не рекомендован',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: preview.suggestedAmount > 0 ? AppTheme.accent : Colors.white,
+              color: preview.suggestedAmount > 0
+                  ? AppTheme.accent
+                  : Colors.white,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             nextIncomeLabel,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.secondaryText,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
           ),
           const SizedBox(height: 12),
           Container(
@@ -1480,16 +1537,16 @@ class _MetricChip extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AppTheme.secondaryText,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1498,58 +1555,66 @@ class _MetricChip extends StatelessWidget {
 }
 
 class _MonthAnalysisCard extends StatelessWidget {
-  const _MonthAnalysisCard({required this.summary, required this.title});
+  const _MonthAnalysisCard({
+    required this.summary,
+    required this.title,
+    required this.onTap,
+  });
 
   final _AnalysisSummary summary;
   final String title;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
-          ),
-          const SizedBox(height: 18),
-          _MetricRow(
-            label: 'Поступления',
-            amount: summary.income,
-            color: AppTheme.accent,
-          ),
-          const SizedBox(height: 10),
-          SegmentedSpendBar(
-            segments: <SpendSegment>[
-              SpendSegment(color: Colors.white24, value: summary.income),
-            ],
-            height: 12,
-          ),
-          const SizedBox(height: 16),
-          _MetricRow(
-            label: 'Расходы',
-            amount: summary.expenses,
-            color: Colors.white,
-          ),
-          const SizedBox(height: 10),
-          SegmentedSpendBar(
-            segments: <SpendSegment>[
-              SpendSegment(color: AppTheme.blue, value: summary.qr),
-              SpendSegment(color: AppTheme.accent, value: summary.transfers),
-              SpendSegment(color: AppTheme.yellow, value: summary.shopping),
-              SpendSegment(color: AppTheme.coral, value: summary.restaurants),
-            ],
-            height: 16,
-          ),
-        ],
+            const SizedBox(height: 18),
+            _MetricRow(
+              label: 'Поступления',
+              amount: summary.income,
+              color: const Color(0xFF4CAF50),
+              prefix: '+',
+            ),
+            const SizedBox(height: 14),
+            _MetricRow(
+              label: 'Расходы',
+              amount: summary.expenses,
+              color: const Color(0xFFE57373),
+              prefix: '-',
+            ),
+            const SizedBox(height: 14),
+            SegmentedSpendBar(
+              segments: <SpendSegment>[
+                SpendSegment(
+                  color: const Color(0xFF4CAF50),
+                  value: summary.income,
+                ),
+                SpendSegment(
+                  color: const Color(0xFFE57373),
+                  value: summary.expenses,
+                ),
+              ],
+              height: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1560,11 +1625,13 @@ class _MetricRow extends StatelessWidget {
     required this.label,
     required this.amount,
     required this.color,
+    this.prefix,
   });
 
   final String label;
   final double amount;
   final Color color;
+  final String? prefix;
 
   @override
   Widget build(BuildContext context) {
@@ -1580,7 +1647,7 @@ class _MetricRow extends StatelessWidget {
           ),
         ),
         Text(
-          SomFormatter.amount(amount),
+          '${prefix ?? ''}${SomFormatter.amount(amount)}',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
             color: color,
             fontWeight: FontWeight.w600,
@@ -1635,67 +1702,6 @@ class _BreakdownCard extends StatelessWidget {
             color: AppTheme.coral,
             title: 'Рестораны',
             amount: summary.restaurants,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SaveSuggestionCard extends StatelessWidget {
-  const _SaveSuggestionCard({required this.suggestion});
-
-  final SaveSuggestionModel suggestion;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Совет по накоплению',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            suggestion.amount <= 0
-                ? 'Свободной суммы для перевода в накопления сейчас нет.'
-                : 'Можно отложить ${SomFormatter.amount(suggestion.amount)}',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: suggestion.amount <= 0 ? Colors.white : AppTheme.accent,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            suggestion.reason,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppTheme.secondaryText,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceSoft,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              'Страховой резерв: ${SomFormatter.amount(suggestion.safetyReserve)}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ),
         ],
       ),

@@ -312,18 +312,6 @@ class HackathonBankApplicationTests {
     }
 
     @Test
-    void saveSuggestionReturnsBreakdownFields() throws Exception {
-        mockMvc.perform(get("/api/v1/ai/save-suggestion"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").exists())
-                .andExpect(jsonPath("$.currentBalance").exists())
-                .andExpect(jsonPath("$.scheduledOutflow").exists())
-                .andExpect(jsonPath("$.smartListReserve").exists())
-                .andExpect(jsonPath("$.safetyReserve").exists())
-                .andExpect(jsonPath("$.freeAmount").exists());
-    }
-
-    @Test
     void autoDailySaveSettingCanBeEnabledAndReadBack() throws Exception {
         mockMvc.perform(get("/api/v1/ai/auto-daily-save"))
                 .andExpect(status().isOk())

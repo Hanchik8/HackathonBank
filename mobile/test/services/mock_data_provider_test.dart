@@ -88,21 +88,16 @@ void main() {
     );
   });
 
-  test('setSmartListEnabled toggles suggestion reserve source', () async {
+  test('setSmartListEnabled updates smart list state', () async {
     MockDataProvider.initDemoData(
       accounts: sampleAccounts(),
       transactions: sampleTransactions(),
       scheduledPayments: const [],
     );
 
-    final before = MockDataProvider.computeSuggestedSave();
-
     await MockDataProvider.setSmartListEnabled(false);
 
-    final after = MockDataProvider.computeSuggestedSave();
-
     expect(MockDataProvider.smartListEnabled, isFalse);
-    expect(after.amount, greaterThanOrEqualTo(before.amount));
   });
 
   test('setSmartCategoryFavorite persists favorite flag in smart list', () async {

@@ -5,7 +5,6 @@ import com.example.hackathonbank.ai.dto.AiAnalyzeResponse;
 import com.example.hackathonbank.ai.dto.AiDashboardResponse;
 import com.example.hackathonbank.ai.dto.AiExecuteRequest;
 import com.example.hackathonbank.ai.dto.AiExecuteResponse;
-import com.example.hackathonbank.ai.dto.SaveSuggestionResponse;
 import com.example.hackathonbank.controller.dto.BooleanSettingRequest;
 import com.example.hackathonbank.controller.dto.BooleanSettingResponse;
 import com.example.hackathonbank.controller.dto.DailySavingsPreviewResponse;
@@ -55,11 +54,6 @@ public class AiController {
     @PostMapping("/execute")
     public AiExecuteResponse execute(@Valid @RequestBody AiExecuteRequest request) {
         return aiAnalysisService.execute(request);
-    }
-
-    @GetMapping("/save-suggestion")
-    public SaveSuggestionResponse saveSuggestion() {
-        return aiAnalysisService.suggestEndOfMonthSave();
     }
 
     @GetMapping("/daily-safe-to-save")
