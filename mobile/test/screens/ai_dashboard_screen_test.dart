@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hackathon_bank_mobile/screens/ai_dashboard_screen.dart';
 import 'package:hackathon_bank_mobile/services/bank_api_dashboard_repository.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
+import 'package:m_bank_dashboard/src/widgets/action_circle_button.dart';
 import 'package:m_bank_dashboard/src/widgets/transaction_capture_sheet.dart';
 
 import '../test_support/fake_bank_api_service.dart';
@@ -169,5 +170,48 @@ void main() {
 
     expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
     expect(find.byType(DropdownButtonFormField<String?>), findsNothing);
+  });
+
+  testWidgets('dashboard toggles auto save and advances one day per tap', (
+    WidgetTester tester,
+  ) async {
+    final apiService = FakeBankApiService();
+    final repository = BankApiDashboardRepository(apiService: apiService);
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: AiDashboardScreen(
+            repository: repository,
+            refreshSignal: 0,
+            onDataChanged: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final autoSaveSwitch = tester
+        .widgetList<Switch>(find.byType(Switch, skipOffstage: false))
+        .last;
+    autoSaveSwitch.onChanged?.call(true);
+    await tester.pumpAndSettle();
+
+    expect(apiService.lastAutoDailySaveEnabled, isTrue);
+
+    final demoButton = tester
+        .widgetList<ActionCircleButton>(
+          find.byType(ActionCircleButton, skipOffstage: false),
+        )
+        .first;
+    demoButton.onTap();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(apiService.simulateDayCalls, 1);
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 }

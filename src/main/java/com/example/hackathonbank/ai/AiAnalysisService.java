@@ -33,9 +33,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class AiAnalysisService {
+
+    private static final String INVALID_ACTION_TOKEN_MESSAGE = "Токен действия недействителен или уже истек.";
 
     private final ForecastService forecastService;
     private final TransactionService transactionService;
@@ -87,15 +90,16 @@ public class AiAnalysisService {
         BigDecimal deficit = dashboard.minimumProjectedBalance().abs();
         List<BalanceSuggestionResponse> suggestions = buildSuggestions(dashboard, deficit);
         LocalDate horizonDate = userSettingsService.currentDate().plusDays(Math.max(0, offsetDays));
-        LocalDate deficitDate = firstNegativeDate(dashboard).orElse(horizonDate);
-        ScheduledPayment highlightedPayment = highestImpactPaymentBefore(deficitDate, offsetDays);
-        String message = suggestions.isEmpty()
-                ? "К %s ожидается дефицит %s. Подходящих действий не найдено.".formatted(shortDateLabel(deficitDate), money(deficit))
-                : "К %s ожидается дефицит %s. Ниже варианты, как закрыть разрыв.".formatted(shortDateLabel(deficitDate), money(deficit));
-        if (highlightedPayment != null) {
-            message = "%s Ключевой риск: платеж \"%s\" на %s."
-                    .formatted(message, highlightedPayment.getTitle(), money(highlightedPayment.getAmount()));
-        }
+        LocalDate firstNegativeDate = firstNegativeDate(dashboard).orElse(horizonDate);
+        LocalDate minimumBalanceDate = minimumBalanceDate(dashboard).orElse(firstNegativeDate);
+        List<ScheduledPayment> contributingPayments = paymentsContributingToDeficit(minimumBalanceDate, offsetDays);
+        String message = buildDeficitTimelineMessage(
+                firstNegativeDate,
+                minimumBalanceDate,
+                deficit,
+                contributingPayments,
+                suggestions.isEmpty()
+        );
         String actionToken = suggestions.isEmpty() ? null : suggestions.get(0).actionToken();
 
         return new AiAnalyzeResponse(
@@ -254,22 +258,94 @@ public class AiAnalysisService {
                 .toList();
     }
 
-    private ScheduledPayment highestImpactPaymentBefore(LocalDate deficitDate, int horizonDays) {
-        return paymentsInHorizon(horizonDays).stream()
-                .filter(payment -> !payment.getDueDate().isAfter(deficitDate))
-                .max(Comparator.comparing(ScheduledPayment::getAmount)
-                        .thenComparing(ScheduledPayment::getDueDate, Comparator.reverseOrder()))
-                .orElseGet(() -> paymentsInHorizon(horizonDays).stream()
-                        .max(Comparator.comparing(ScheduledPayment::getAmount)
-                                .thenComparing(ScheduledPayment::getDueDate, Comparator.reverseOrder()))
-                        .orElse(null));
-    }
-
     private java.util.Optional<LocalDate> firstNegativeDate(AiDashboardResponse dashboard) {
         return dashboard.points().stream()
                 .filter(point -> point.balance().compareTo(BigDecimal.ZERO) < 0)
                 .map(point -> LocalDate.parse(point.isoDate()))
                 .findFirst();
+    }
+
+    private java.util.Optional<LocalDate> minimumBalanceDate(AiDashboardResponse dashboard) {
+        return dashboard.points().stream()
+                .filter(point -> point.balance().compareTo(dashboard.minimumProjectedBalance()) == 0)
+                .map(point -> LocalDate.parse(point.isoDate()))
+                .findFirst();
+    }
+
+    private List<ScheduledPayment> paymentsContributingToDeficit(LocalDate untilDate, int horizonDays) {
+        return paymentsInHorizon(horizonDays).stream()
+                .filter(payment -> !payment.getDueDate().isAfter(untilDate))
+                .toList();
+    }
+
+    private String buildDeficitTimelineMessage(LocalDate firstNegativeDate,
+                                               LocalDate minimumBalanceDate,
+                                               BigDecimal deficit,
+                                               List<ScheduledPayment> payments,
+                                               boolean noSuggestions) {
+        if (payments.isEmpty()) {
+            return noSuggestions
+                    ? "К %s ожидается дефицит %s. Подходящих действий не найдено."
+                    .formatted(shortDateLabel(minimumBalanceDate), money(deficit))
+                    : "К %s ожидается дефицит %s. Ниже варианты, как закрыть разрыв."
+                    .formatted(shortDateLabel(minimumBalanceDate), money(deficit));
+        }
+
+        StringBuilder message = new StringBuilder();
+        if (firstNegativeDate.isEqual(minimumBalanceDate)) {
+            message.append("С ")
+                    .append(shortDateLabel(firstNegativeDate))
+                    .append(" счет уйдет в минус.");
+        } else {
+            message.append("С ")
+                    .append(shortDateLabel(firstNegativeDate))
+                    .append(" счет уйдет в минус, а к ")
+                    .append(shortDateLabel(minimumBalanceDate))
+                    .append(" дефицит вырастет до ")
+                    .append(money(deficit))
+                    .append(".");
+        }
+
+        Map<LocalDate, List<ScheduledPayment>> paymentsByDate = payments.stream()
+                .collect(Collectors.groupingBy(
+                        ScheduledPayment::getDueDate,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        for (Map.Entry<LocalDate, List<ScheduledPayment>> entry : paymentsByDate.entrySet()) {
+            BigDecimal amountForDate = entry.getValue().stream()
+                    .map(ScheduledPayment::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            message.append(" ")
+                    .append(shortDateLabel(entry.getKey()))
+                    .append(" спишется ")
+                    .append(money(amountForDate))
+                    .append(" ");
+            if (entry.getValue().size() == 1) {
+                message.append("по платежу \"")
+                        .append(entry.getValue().get(0).getTitle())
+                        .append("\".");
+            } else {
+                String titles = entry.getValue().stream()
+                        .map(ScheduledPayment::getTitle)
+                        .map(title -> "\"" + title + "\"")
+                        .collect(Collectors.joining(", "));
+                message.append("по платежам ")
+                        .append(titles)
+                        .append(".");
+            }
+        }
+
+        message.append(" В сумме к ")
+                .append(shortDateLabel(minimumBalanceDate))
+                .append(" дефицит составит ")
+                .append(money(deficit))
+                .append(".");
+        message.append(noSuggestions
+                ? " Подходящих действий не найдено."
+                : " Ниже варианты, как закрыть разрыв.");
+        return message.toString();
     }
 
     private ScheduledPayment pickSinglePostponeCandidate(List<ScheduledPayment> payments, BigDecimal deficit) {
@@ -367,7 +443,7 @@ public class AiAnalysisService {
 
     private ActionExecutionResult executeActionToken(String actionToken) {
         if (actionToken == null || actionToken.isBlank()) {
-            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+            throw new IllegalArgumentException(INVALID_ACTION_TOKEN_MESSAGE);
         }
 
         String[] parts = actionToken.split(":");
@@ -376,7 +452,7 @@ public class AiAnalysisService {
             case "POSTPONE" -> postponeSingle(parts);
             case "POSTPONE_GROUP" -> postponeGroup(parts);
             case "CLOSE_DEPOSIT_AND_POSTPONE" -> closeDepositAndPostpone(parts);
-            default -> throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+            default -> throw new IllegalArgumentException(INVALID_ACTION_TOKEN_MESSAGE);
         };
     }
 
@@ -387,7 +463,7 @@ public class AiAnalysisService {
 
     private ActionExecutionResult postponeSingle(String[] parts) {
         if (parts.length < 3) {
-            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+            throw new IllegalArgumentException(INVALID_ACTION_TOKEN_MESSAGE);
         }
         Long paymentId = Long.parseLong(parts[1]);
         LocalDate targetDate = resolveTargetDate(parts[2], paymentDateById(paymentId));
@@ -396,7 +472,7 @@ public class AiAnalysisService {
 
     private ActionExecutionResult postponeGroup(String[] parts) {
         if (parts.length < 3) {
-            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+            throw new IllegalArgumentException(INVALID_ACTION_TOKEN_MESSAGE);
         }
         List<Long> paymentIds = parsePaymentIds(parts[1]);
         LocalDate targetDate = resolveTargetDate(parts[2], latestPaymentDate(paymentIds));
@@ -405,7 +481,7 @@ public class AiAnalysisService {
 
     private ActionExecutionResult closeDepositAndPostpone(String[] parts) {
         if (parts.length < 4) {
-            throw new IllegalArgumentException("Токен действия недействителен или уже истек.");
+            throw new IllegalArgumentException(INVALID_ACTION_TOKEN_MESSAGE);
         }
         closeDeposit();
         List<Long> paymentIds = parsePaymentIds(parts[2]);
@@ -536,3 +612,4 @@ public class AiAnalysisService {
     private record IncomePattern(int dayOfMonth, int occurrences, BigDecimal totalAmount) {
     }
 }
+

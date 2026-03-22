@@ -1,6 +1,7 @@
 package com.example.hackathonbank.repository;
 
 import com.example.hackathonbank.model.Transaction;
+import com.example.hackathonbank.model.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +14,11 @@ import java.util.Optional;
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
     List<Transaction> findByUserIdOrderByOccurredAtDesc(Long userId);
+
+    List<Transaction> findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(Long userId,
+                                                                                     TransactionStatus status,
+                                                                                     LocalDateTime windowStart,
+                                                                                     LocalDateTime windowEnd);
 
     List<Transaction> findByUserIdAndSmartCategoryId(Long userId, Long smartCategoryId);
 

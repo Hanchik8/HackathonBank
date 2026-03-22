@@ -194,6 +194,39 @@ class HackathonBankApplicationTests {
     }
 
     @Test
+    void analyzeExplainsMultiplePaymentDatesBeforeMinimumDeficit() throws Exception {
+        var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
+        LocalDate firstPaymentDate = LocalDate.now().plusDays(4);
+        LocalDate secondPaymentDate = LocalDate.now().plusDays(6);
+
+        mockMvc.perform(post("/api/v1/scheduled-payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new ScheduledPaymentRequest(
+                                mainAccount.getId(),
+                                "Долг",
+                                "Друг",
+                                "Покупки",
+                                new BigDecimal("10000.00"),
+                                secondPaymentDate
+                        ))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/ai/analyze")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"offsetDays":10}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message", containsString(shortDateLabel(firstPaymentDate))))
+                .andExpect(jsonPath("$.message", containsString("25000.00 KGS")))
+                .andExpect(jsonPath("$.message", containsString("Аренда")))
+                .andExpect(jsonPath("$.message", containsString(shortDateLabel(secondPaymentDate))))
+                .andExpect(jsonPath("$.message", containsString("10000.00 KGS")))
+                .andExpect(jsonPath("$.message", containsString("Долг")))
+                .andExpect(jsonPath("$.message", containsString("20000.00 KGS")));
+    }
+
+    @Test
     void analyzeRespectsOffsetDaysAndSkipsAlertOutsidePaymentWindow() throws Exception {
         mockMvc.perform(post("/api/v1/ai/analyze")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -288,6 +321,70 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.smartListReserve").exists())
                 .andExpect(jsonPath("$.safetyReserve").exists())
                 .andExpect(jsonPath("$.freeAmount").exists());
+    }
+
+    @Test
+    void autoDailySaveSettingCanBeEnabledAndReadBack() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/auto-daily-save"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false));
+
+        mockMvc.perform(post("/api/v1/ai/auto-daily-save")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"enabled":true}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/ai/auto-daily-save"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true));
+    }
+
+    @Test
+    void dailySafeToSavePreviewReturnsCalculationBreakdown() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/daily-safe-to-save"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.suggestedAmount").exists())
+                .andExpect(jsonPath("$.safeBalance").exists())
+                .andExpect(jsonPath("$.currentBalance").exists())
+                .andExpect(jsonPath("$.requiredPayments").exists())
+                .andExpect(jsonPath("$.lifeBuffer").exists())
+                .andExpect(jsonPath("$.nextIncomeDate").exists())
+                .andExpect(jsonPath("$.daysToNextIncome").isNumber())
+                .andExpect(jsonPath("$.status").isString());
+    }
+
+    @Test
+    void simulateDayAdvancesVirtualDateAndExecutesDailySaveWhenEnabled() throws Exception {
+        var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
+
+        mockMvc.perform(post("/api/v1/demo/accounts/{accountId}/adjust", mainAccount.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"delta":60000.00,"title":"Р”РµРјРѕ РїРѕРїРѕР»РЅРµРЅРёРµ"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/ai/auto-daily-save")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"enabled":true}
+                                """))
+                .andExpect(status().isOk());
+
+        String body = mockMvc.perform(post("/api/v1/demo/simulate-day"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentDate").exists())
+                .andExpect(jsonPath("$.autoSaveExecuted").value(true))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode json = objectMapper.readTree(body);
+        assertThat(json.get("savedAmount").decimalValue()).isPositive();
+        assertThat(json.get("notification").asText()).isNotBlank();
     }
 
     @Test

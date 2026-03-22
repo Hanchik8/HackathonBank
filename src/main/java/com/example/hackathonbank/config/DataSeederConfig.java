@@ -8,10 +8,12 @@ import com.example.hackathonbank.model.Transaction;
 import com.example.hackathonbank.model.TransactionStatus;
 import com.example.hackathonbank.model.TransactionType;
 import com.example.hackathonbank.model.User;
+import com.example.hackathonbank.model.UserSettings;
 import com.example.hackathonbank.repository.AccountRepository;
 import com.example.hackathonbank.repository.ScheduledPaymentRepository;
 import com.example.hackathonbank.repository.TransactionRepository;
 import com.example.hackathonbank.repository.UserRepository;
+import com.example.hackathonbank.repository.UserSettingsRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,13 +31,15 @@ public class DataSeederConfig {
     public CommandLineRunner seedBankData(UserRepository userRepository,
                                           AccountRepository accountRepository,
                                           TransactionRepository transactionRepository,
-                                          ScheduledPaymentRepository scheduledPaymentRepository) {
+                                          ScheduledPaymentRepository scheduledPaymentRepository,
+                                          UserSettingsRepository userSettingsRepository) {
         return args -> {
             if (userRepository.count() > 0) {
                 return;
             }
 
             User user = userRepository.save(new User("Azizkhan"));
+            userSettingsRepository.save(new UserSettings(user, true, false, LocalDate.now()));
             Account mainAccount = accountRepository.save(
                     new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS")
             );

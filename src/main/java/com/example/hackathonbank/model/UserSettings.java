@@ -31,15 +31,27 @@ public class UserSettings {
     private boolean adminModeEnabled;
 
     @Column(nullable = false)
+    private boolean autoDailySaveEnabled;
+
+    @Column(nullable = false)
     private LocalDate effectiveDate;
 
     protected UserSettings() {
     }
 
     public UserSettings(User user, boolean smartListEnabled, boolean adminModeEnabled, LocalDate effectiveDate) {
+        this(user, smartListEnabled, adminModeEnabled, false, effectiveDate);
+    }
+
+    public UserSettings(User user,
+                        boolean smartListEnabled,
+                        boolean adminModeEnabled,
+                        boolean autoDailySaveEnabled,
+                        LocalDate effectiveDate) {
         this.user = user;
         this.smartListEnabled = smartListEnabled;
         this.adminModeEnabled = adminModeEnabled;
+        this.autoDailySaveEnabled = autoDailySaveEnabled;
         this.effectiveDate = effectiveDate;
     }
 
@@ -65,6 +77,14 @@ public class UserSettings {
 
     public void setAdminModeEnabled(boolean adminModeEnabled) {
         this.adminModeEnabled = adminModeEnabled;
+    }
+
+    public boolean isAutoDailySaveEnabled() {
+        return autoDailySaveEnabled;
+    }
+
+    public void setAutoDailySaveEnabled(boolean autoDailySaveEnabled) {
+        this.autoDailySaveEnabled = autoDailySaveEnabled;
     }
 
     public LocalDate getEffectiveDate() {

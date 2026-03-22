@@ -142,4 +142,22 @@ class TransferServiceTests {
         assertThat(main.getBalance()).isEqualByComparingTo("12800.00");
         assertThat(response.message()).contains("Оплата магазину");
     }
+    @Test
+    void externalTransferRejectsSavingsAsSource() {
+        User user = new User("Azizkhan");
+        Account savings = new Account(user, AccountType.SAVINGS, "Savings", new BigDecimal("50000.00"), "KGS");
+        ReflectionTestUtils.setField(savings, "id", 1L);
+
+        when(accountService.getOwnedAccount(1L)).thenReturn(savings);
+
+        assertThatThrownBy(() -> transferService.transferExternal(new ExternalTransferRequest(
+                1L,
+                TransferRecipientType.USER,
+                "Aigerim",
+                new BigDecimal("1200.00"),
+                null
+        )))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("накопительного депозита");
+    }
 }

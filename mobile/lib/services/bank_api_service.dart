@@ -1,4 +1,8 @@
-import 'package:m_bank_dashboard/m_bank_dashboard.dart' show SubscriptionModel;
+import 'package:m_bank_dashboard/m_bank_dashboard.dart'
+    show
+        DailySafeToSaveModel,
+        SimulateDayResponseModel,
+        SubscriptionModel;
 
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
@@ -127,7 +131,7 @@ class BankApiService {
                 'counterparty': counterparty,
                 'category': category,
                 'amount': amount,
-                'dueDate': dueDate.toIso8601String().split('T').first,
+                'dueDate': _toIsoDate(dueDate),
                 'isReminder': isReminder,
               },
             )
@@ -147,7 +151,7 @@ class BankApiService {
         'accountId': accountId,
         'title': title,
         'amount': amount,
-        'dueDate': dueDate.toIso8601String().split('T').first,
+        'dueDate': _toIsoDate(dueDate),
       },
     );
   }
@@ -279,9 +283,7 @@ class BankApiService {
   Future<void> setEffectiveDate(DateTime date) async {
     await _apiClient.postJson(
       '/demo/date',
-      body: <String, dynamic>{
-        'date': date.toIso8601String().split('T').first,
-      },
+      body: <String, dynamic>{'date': _toIsoDate(date)},
     );
   }
 
@@ -303,6 +305,37 @@ class BankApiService {
     final json =
         await _apiClient.getJson('/ai/save-suggestion') as Map<String, dynamic>;
     return SaveSuggestionModel.fromJson(json);
+  }
+
+  Future<DailySafeToSaveModel> fetchDailySafeToSave() async {
+    final json =
+        await _apiClient.getJson('/ai/daily-safe-to-save')
+            as Map<String, dynamic>;
+    return DailySafeToSaveModel.fromJson(json);
+  }
+
+  Future<bool> getAutoDailySaveEnabled() async {
+    final json =
+        await _apiClient.getJson('/ai/auto-daily-save')
+            as Map<String, dynamic>;
+    return json['enabled'] as bool? ?? false;
+  }
+
+  Future<void> setAutoDailySaveEnabled(bool enabled) async {
+    await _apiClient.postJson(
+      '/ai/auto-daily-save',
+      body: <String, dynamic>{'enabled': enabled},
+    );
+  }
+
+  Future<SimulateDayResponseModel> simulateDay() async {
+    final json =
+        await _apiClient.postJson(
+              '/demo/simulate-day',
+              body: <String, dynamic>{},
+            )
+            as Map<String, dynamic>;
+    return SimulateDayResponseModel.fromJson(json);
   }
 
   Future<TransferResultModel> transferBetweenAccounts({
@@ -351,5 +384,9 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return TransferResultModel.fromJson(json);
+  }
+
+  String _toIsoDate(DateTime value) {
+    return value.toIso8601String().split('T').first;
   }
 }
