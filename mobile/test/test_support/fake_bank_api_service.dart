@@ -2,7 +2,6 @@ import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_analysis_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
 import 'package:hackathon_bank_mobile/models/daily_safe_to_save_model.dart';
-import 'package:hackathon_bank_mobile/models/save_suggestion_model.dart';
 import 'package:hackathon_bank_mobile/models/simulate_day_response_model.dart';
 import 'package:hackathon_bank_mobile/models/smart_category_model.dart';
 import 'package:hackathon_bank_mobile/models/transaction_model.dart';
@@ -148,15 +147,6 @@ List<SmartCategory> sampleSmartCategories() {
   ];
 }
 
-SaveSuggestionModel sampleSaveSuggestion() {
-  return const SaveSuggestionModel(
-    amount: 6200,
-    reason:
-        'До конца месяца остается свободный остаток после учета платежей и лимитов.',
-    safetyReserve: 3000,
-  );
-}
-
 DailySafeToSaveModel sampleDailySafeToSave() {
   return DailySafeToSaveModel(
     enabled: true,
@@ -243,7 +233,6 @@ class FakeBankApiService extends BankApiService {
     AiAnalysisModel? analysis,
     AiExecutionModel? execution,
     List<SmartCategory>? smartCategories,
-    SaveSuggestionModel? saveSuggestion,
     DailySafeToSaveModel? dailySafeToSave,
     TransferResultModel? transferResult,
     TransferResultModel? internalTransferResult,
@@ -258,7 +247,6 @@ class FakeBankApiService extends BankApiService {
        _smartCategories = List<SmartCategory>.from(
          smartCategories ?? sampleSmartCategories(),
        ),
-       _saveSuggestion = saveSuggestion ?? sampleSaveSuggestion(),
        _dailySafeToSaveTemplate = dailySafeToSave ?? sampleDailySafeToSave(),
        _transferResult = transferResult ?? sampleTransferResult(),
        _internalTransferResult =
@@ -275,7 +263,6 @@ class FakeBankApiService extends BankApiService {
   final AiDashboardModel _dashboardTemplate;
   final AiAnalysisModel? _analysisOverride;
   final AiExecutionModel _executionFallback;
-  final SaveSuggestionModel _saveSuggestion;
   final DailySafeToSaveModel _dailySafeToSaveTemplate;
   final TransferResultModel _transferResult;
   final TransferResultModel _internalTransferResult;
@@ -311,6 +298,8 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastSmartCategoryDraft;
   int simulateDayCalls = 0;
   bool? lastAutoDailySaveEnabled;
+  List<Map<String, String>> lastChatHistory = const <Map<String, String>>[];
+  String? lastChatMessage;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -321,9 +310,6 @@ class FakeBankApiService extends BankApiService {
   @override
   Future<List<SmartCategory>> fetchSmartCategories() async =>
       _smartListEnabled ? _smartCategories : const <SmartCategory>[];
-
-  @override
-  Future<SaveSuggestionModel> suggestEndOfMonthSave() async => _saveSuggestion;
 
   @override
   Future<DailySafeToSaveModel> fetchDailySafeToSave() async =>
@@ -797,6 +783,22 @@ class FakeBankApiService extends BankApiService {
       'smartCategoryId': smartCategoryId,
     };
     return _transferResult;
+  }
+
+  @override
+  Future<Map<String, String>> sendAiChatMessage({
+    required List<Map<String, String>> history,
+    required String newMessage,
+  }) async {
+    lastChatHistory = history
+        .map((message) => Map<String, String>.from(message))
+        .toList(growable: false);
+    lastChatMessage = newMessage;
+    return <String, String>{
+      'role': 'assistant',
+      'content':
+          'Safe-to-Save сейчас советует держать резерв под ближайшие платежи и не увеличивать накопления до следующего дохода.',
+    };
   }
 
   AiDashboardModel _buildDashboard(int offsetDays) {

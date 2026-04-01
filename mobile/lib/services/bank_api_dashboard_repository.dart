@@ -155,10 +155,6 @@ class BankApiDashboardRepository implements DashboardRepository {
   );
 
   @override
-  Future<SaveSuggestionModel> suggestEndOfMonthSave() =>
-      _apiService.suggestEndOfMonthSave();
-
-  @override
   Future<DailySafeToSaveModel> fetchDailySafeToSave() =>
       _apiService.fetchDailySafeToSave();
 

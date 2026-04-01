@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
 import java.util.NoSuchElementException;
@@ -29,10 +30,16 @@ public class RestExceptionHandler {
         return new ErrorResponse(exception.getMessage(), LocalDateTime.now());
     }
 
-    @ExceptionHandler(NoSuchElementException.class)
+    @ExceptionHandler({
+            NoSuchElementException.class,
+            NoResourceFoundException.class
+    })
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse handleNotFound(NoSuchElementException exception) {
-        return new ErrorResponse(exception.getMessage(), LocalDateTime.now());
+    public ErrorResponse handleNotFound(Exception exception) {
+        String message = exception instanceof NoSuchElementException
+                ? exception.getMessage()
+                : "Ресурс не найден.";
+        return new ErrorResponse(message, LocalDateTime.now());
     }
 
     @ExceptionHandler(Exception.class)

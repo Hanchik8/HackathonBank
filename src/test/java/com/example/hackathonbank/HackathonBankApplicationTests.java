@@ -312,18 +312,6 @@ class HackathonBankApplicationTests {
     }
 
     @Test
-    void saveSuggestionReturnsBreakdownFields() throws Exception {
-        mockMvc.perform(get("/api/v1/ai/save-suggestion"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.amount").exists())
-                .andExpect(jsonPath("$.currentBalance").exists())
-                .andExpect(jsonPath("$.scheduledOutflow").exists())
-                .andExpect(jsonPath("$.smartListReserve").exists())
-                .andExpect(jsonPath("$.safetyReserve").exists())
-                .andExpect(jsonPath("$.freeAmount").exists());
-    }
-
-    @Test
     void autoDailySaveSettingCanBeEnabledAndReadBack() throws Exception {
         mockMvc.perform(get("/api/v1/ai/auto-daily-save"))
                 .andExpect(status().isOk())
@@ -354,6 +342,22 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.nextIncomeDate").exists())
                 .andExpect(jsonPath("$.daysToNextIncome").isNumber())
                 .andExpect(jsonPath("$.status").isString());
+    }
+
+    @Test
+    void saveSuggestionEndpointReturnsCompatibilityPayload() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/save-suggestion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").exists())
+                .andExpect(jsonPath("$.reason").isString())
+                .andExpect(jsonPath("$.safetyReserve").exists());
+    }
+
+    @Test
+    void missingRouteReturnsNotFoundInsteadOfInternalServerError() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/route-that-does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Ресурс не найден."));
     }
 
     @Test

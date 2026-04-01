@@ -5,10 +5,10 @@ import com.example.hackathonbank.ai.dto.AiAnalyzeResponse;
 import com.example.hackathonbank.ai.dto.AiDashboardResponse;
 import com.example.hackathonbank.ai.dto.AiExecuteRequest;
 import com.example.hackathonbank.ai.dto.AiExecuteResponse;
-import com.example.hackathonbank.ai.dto.SaveSuggestionResponse;
 import com.example.hackathonbank.controller.dto.BooleanSettingRequest;
 import com.example.hackathonbank.controller.dto.BooleanSettingResponse;
 import com.example.hackathonbank.controller.dto.DailySavingsPreviewResponse;
+import com.example.hackathonbank.controller.dto.SaveSuggestionResponse;
 import com.example.hackathonbank.service.ForecastService;
 import com.example.hackathonbank.service.DailySavingsService;
 import com.example.hackathonbank.service.UserSettingsService;
@@ -57,14 +57,19 @@ public class AiController {
         return aiAnalysisService.execute(request);
     }
 
-    @GetMapping("/save-suggestion")
-    public SaveSuggestionResponse saveSuggestion() {
-        return aiAnalysisService.suggestEndOfMonthSave();
-    }
-
     @GetMapping("/daily-safe-to-save")
     public DailySavingsPreviewResponse dailySafeToSave() {
         return dailySavingsService.previewForCurrentUser();
+    }
+
+    @GetMapping("/save-suggestion")
+    public SaveSuggestionResponse saveSuggestion() {
+        DailySavingsPreviewResponse preview = dailySavingsService.previewForCurrentUser();
+        return new SaveSuggestionResponse(
+                preview.suggestedAmount(),
+                preview.status(),
+                preview.lifeBuffer()
+        );
     }
 
     @GetMapping("/auto-daily-save")

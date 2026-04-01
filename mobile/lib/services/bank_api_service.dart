@@ -7,7 +7,6 @@ import 'package:m_bank_dashboard/m_bank_dashboard.dart'
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
 import '../models/ai_dashboard_model.dart';
-import '../models/save_suggestion_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
 import '../models/transfer_result_model.dart';
@@ -75,6 +74,40 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return AiAnalysisModel.fromJson(json);
+  }
+
+  Future<Map<String, String>> sendAiChatMessage({
+    required List<Map<String, String>> history,
+    required String newMessage,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/ai/chat',
+              body: <String, dynamic>{
+                'history': history,
+                'newMessage': newMessage,
+              },
+            )
+            as Map<String, dynamic>;
+    final message = json['message'] as Map<String, dynamic>? ?? const {};
+    return <String, String>{
+      'role': message['role'] as String? ?? 'assistant',
+      'content': message['content'] as String? ?? '',
+    };
+  }
+
+  Future<List<Map<String, String>>> fetchAiChatHistory() async {
+    final json = await _apiClient.getJson('/ai/chat/history');
+    if (json is! List<dynamic>) {
+      return const <Map<String, String>>[];
+    }
+    return json.map((item) {
+      final message = item as Map<String, dynamic>;
+      return <String, String>{
+        'role': message['role'] as String? ?? 'assistant',
+        'content': message['content'] as String? ?? '',
+      };
+    }).toList(growable: false);
   }
 
   Future<AiExecutionModel> executeAction(String actionToken) async {
@@ -299,12 +332,6 @@ class BankApiService {
             )
             as Map<String, dynamic>;
     return TransactionModel.fromJson(json);
-  }
-
-  Future<SaveSuggestionModel> suggestEndOfMonthSave() async {
-    final json =
-        await _apiClient.getJson('/ai/save-suggestion') as Map<String, dynamic>;
-    return SaveSuggestionModel.fromJson(json);
   }
 
   Future<DailySafeToSaveModel> fetchDailySafeToSave() async {

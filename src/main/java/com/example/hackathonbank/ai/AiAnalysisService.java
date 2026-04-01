@@ -6,7 +6,6 @@ import com.example.hackathonbank.ai.dto.AiExecuteRequest;
 import com.example.hackathonbank.ai.dto.AiExecuteResponse;
 import com.example.hackathonbank.ai.dto.BalanceSuggestionResponse;
 import com.example.hackathonbank.ai.dto.EnrichmentSummary;
-import com.example.hackathonbank.ai.dto.SaveSuggestionResponse;
 import com.example.hackathonbank.model.Account;
 import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.ScheduledPayment;
@@ -15,7 +14,6 @@ import com.example.hackathonbank.model.TransactionStatus;
 import com.example.hackathonbank.service.AccountService;
 import com.example.hackathonbank.service.ForecastService;
 import com.example.hackathonbank.service.ScheduledPaymentService;
-import com.example.hackathonbank.service.SmartCategoryService;
 import com.example.hackathonbank.service.TransactionService;
 import com.example.hackathonbank.service.UserSettingsService;
 import org.springframework.stereotype.Service;
@@ -47,7 +45,6 @@ public class AiAnalysisService {
     private final AccountService accountService;
     private final BankingAgentTools bankingAgentTools;
     private final UserSettingsService userSettingsService;
-    private final SmartCategoryService smartCategoryService;
 
     public AiAnalysisService(ForecastService forecastService,
                              TransactionService transactionService,
@@ -55,8 +52,7 @@ public class AiAnalysisService {
                              TransactionEnrichmentService transactionEnrichmentService,
                              AccountService accountService,
                              BankingAgentTools bankingAgentTools,
-                             UserSettingsService userSettingsService,
-                             SmartCategoryService smartCategoryService) {
+                             UserSettingsService userSettingsService) {
         this.forecastService = forecastService;
         this.transactionService = transactionService;
         this.scheduledPaymentService = scheduledPaymentService;
@@ -64,7 +60,6 @@ public class AiAnalysisService {
         this.accountService = accountService;
         this.bankingAgentTools = bankingAgentTools;
         this.userSettingsService = userSettingsService;
-        this.smartCategoryService = smartCategoryService;
     }
 
     @Transactional(readOnly = true)
@@ -118,42 +113,6 @@ public class AiAnalysisService {
                 result.message(),
                 result.currentBalance(),
                 result.savingsBalance()
-        );
-    }
-
-    @Transactional(readOnly = true)
-    public SaveSuggestionResponse suggestEndOfMonthSave() {
-        LocalDate currentDate = userSettingsService.currentDate();
-        Account main = accountService.getAccountByType(AccountType.MAIN);
-        LocalDate monthEnd = currentDate.withDayOfMonth(currentDate.lengthOfMonth());
-        BigDecimal scheduledOutflow = scheduledPaymentService.getPendingPayments().stream()
-                .filter(payment -> payment.getAccount().getId().equals(main.getId()))
-                .filter(payment -> !payment.getDueDate().isBefore(currentDate))
-                .filter(payment -> !payment.getDueDate().isAfter(monthEnd))
-                .map(ScheduledPayment::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal reservedByBudgets = userSettingsService.isSmartListEnabled()
-                ? smartCategoryService.positiveRemainingReserve(currentDate)
-                : BigDecimal.ZERO;
-        BigDecimal safetyReserve = safetyReserve(main.getBalance());
-        BigDecimal freeAmount = main.getBalance()
-                .subtract(scheduledOutflow)
-                .subtract(reservedByBudgets)
-                .subtract(safetyReserve);
-        BigDecimal suggestionAmount = freeAmount.compareTo(BigDecimal.ZERO) <= 0
-                ? BigDecimal.ZERO
-                : floorToHundreds(freeAmount);
-        String reason = suggestionAmount.compareTo(BigDecimal.ZERO) <= 0
-                ? "Совет считается консервативно: из основного счета уже вычтены будущие списания до конца месяца, резерв Smart List и страховой резерв."
-                : "В накопительный депозит предлагается переводить только свободный остаток после учета будущих списаний, Smart List и страхового резерва.";
-        return new SaveSuggestionResponse(
-                suggestionAmount,
-                reason,
-                safetyReserve,
-                main.getBalance(),
-                scheduledOutflow,
-                reservedByBudgets,
-                freeAmount
         );
     }
 
@@ -569,23 +528,6 @@ public class AiAnalysisService {
             return "Регулярные расходы и запланированные списания создают риск кассового разрыва.";
         }
         return enrichmentSummary.reasoning();
-    }
-
-    private BigDecimal safetyReserve(BigDecimal balance) {
-        BigDecimal reserve = balance.multiply(new BigDecimal("0.15"));
-        if (reserve.compareTo(new BigDecimal("3000")) < 0) {
-            return new BigDecimal("3000.00");
-        }
-        if (reserve.compareTo(new BigDecimal("15000")) > 0) {
-            return new BigDecimal("15000.00");
-        }
-        return reserve.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal floorToHundreds(BigDecimal amount) {
-        return amount.divide(new BigDecimal("100"), 0, RoundingMode.DOWN)
-                .multiply(new BigDecimal("100"))
-                .setScale(2, RoundingMode.HALF_UP);
     }
 
     private String money(BigDecimal amount) {
