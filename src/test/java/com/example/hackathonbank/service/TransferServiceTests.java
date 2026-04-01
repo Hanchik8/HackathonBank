@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,12 @@ class TransferServiceTests {
     @Mock
     private UserContextService userContextService;
 
+    @Mock
+    private SmartCategoryService smartCategoryService;
+
+    @Mock
+    private UserSettingsService userSettingsService;
+
     private TransferService transferService;
 
     @BeforeEach
@@ -50,7 +57,9 @@ class TransferServiceTests {
                 accountRepository,
                 transactionRepository,
                 accountService,
-                userContextService
+                userContextService,
+                smartCategoryService,
+                userSettingsService
         );
     }
 
@@ -65,6 +74,7 @@ class TransferServiceTests {
         when(accountService.getOwnedAccount(1L)).thenReturn(savings);
         when(accountService.getOwnedAccount(2L)).thenReturn(main);
         when(userContextService.getCurrentUser()).thenReturn(user);
+        when(userSettingsService.currentDate()).thenReturn(LocalDate.now());
 
         TransferResponse response = transferService.transfer(new TransferRequest(
                 1L,
@@ -91,6 +101,7 @@ class TransferServiceTests {
         when(accountService.getAccountByType(AccountType.SAVINGS)).thenReturn(savings);
         when(accountService.getAccountByType(AccountType.MAIN)).thenReturn(main);
         when(userContextService.getCurrentUser()).thenReturn(user);
+        when(userSettingsService.currentDate()).thenReturn(LocalDate.now());
 
         ActionExecutionResult result = transferService.autoTransferFromSavings(new BigDecimal("10000.00"));
 
@@ -109,6 +120,7 @@ class TransferServiceTests {
 
         when(accountService.getOwnedAccount(1L)).thenReturn(main);
         when(accountService.getOwnedAccount(2L)).thenReturn(savings);
+        when(userSettingsService.currentDate()).thenReturn(LocalDate.now());
 
         assertThatThrownBy(() -> transferService.transfer(new TransferRequest(
                 1L,
@@ -128,6 +140,7 @@ class TransferServiceTests {
 
         when(accountService.getOwnedAccount(1L)).thenReturn(main);
         when(userContextService.getCurrentUser()).thenReturn(user);
+        when(userSettingsService.currentDate()).thenReturn(LocalDate.now());
 
         ExternalTransferResponse response = transferService.transferExternal(new ExternalTransferRequest(
                 1L,

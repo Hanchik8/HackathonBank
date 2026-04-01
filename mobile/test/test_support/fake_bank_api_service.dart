@@ -299,6 +299,7 @@ class FakeBankApiService extends BankApiService {
   int simulateDayCalls = 0;
   bool? lastAutoDailySaveEnabled;
   List<Map<String, String>> lastChatHistory = const <Map<String, String>>[];
+  List<Map<String, String>> chatHistory = const <Map<String, String>>[];
   String? lastChatMessage;
 
   @override
@@ -786,6 +787,13 @@ class FakeBankApiService extends BankApiService {
   }
 
   @override
+  Future<List<Map<String, String>>> fetchAiChatHistory() async {
+    return chatHistory
+        .map((message) => Map<String, String>.from(message))
+        .toList(growable: false);
+  }
+
+  @override
   Future<Map<String, String>> sendAiChatMessage({
     required List<Map<String, String>> history,
     required String newMessage,
@@ -794,11 +802,17 @@ class FakeBankApiService extends BankApiService {
         .map((message) => Map<String, String>.from(message))
         .toList(growable: false);
     lastChatMessage = newMessage;
-    return <String, String>{
+    final reply = <String, String>{
       'role': 'assistant',
       'content':
           'Safe-to-Save сейчас советует держать резерв под ближайшие платежи и не увеличивать накопления до следующего дохода.',
     };
+    chatHistory = <Map<String, String>>[
+      ...history,
+      <String, String>{'role': 'user', 'content': newMessage},
+      reply,
+    ];
+    return reply;
   }
 
   AiDashboardModel _buildDashboard(int offsetDays) {

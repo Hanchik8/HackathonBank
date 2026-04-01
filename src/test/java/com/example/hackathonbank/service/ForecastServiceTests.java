@@ -28,11 +28,14 @@ class ForecastServiceTests {
     @Mock
     private ScheduledPaymentService scheduledPaymentService;
 
+    @Mock
+    private UserSettingsService userSettingsService;
+
     private ForecastService forecastService;
 
     @BeforeEach
     void setUp() {
-        forecastService = new ForecastService(accountService, scheduledPaymentService);
+        forecastService = new ForecastService(accountService, scheduledPaymentService, userSettingsService);
     }
 
     @Test
@@ -53,6 +56,7 @@ class ForecastServiceTests {
         when(accountService.getAccountByType(AccountType.MAIN)).thenReturn(main);
         when(accountService.getAccountByType(AccountType.SAVINGS)).thenReturn(savings);
         when(scheduledPaymentService.getPendingPayments()).thenReturn(List.of(rent));
+        when(userSettingsService.currentDate()).thenReturn(LocalDate.now());
 
         AiDashboardResponse dashboard = forecastService.buildDashboard(42);
 

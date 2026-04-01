@@ -27,7 +27,9 @@ class OpenRouterAiChatClientTests {
                 new ObjectMapper(),
                 "https://openrouter.ai/api/v1/chat/completions",
                 "test-key",
-                "google/gemini-2.0-flash-001"
+                "google/gemini-2.0-flash-001",
+                "http://localhost:8080",
+                "HackathonBank"
         );
 
         when(aiCallExecutor.execute(any()))
@@ -47,7 +49,9 @@ class OpenRouterAiChatClientTests {
                 new ObjectMapper(),
                 "https://openrouter.ai/api/v1/chat/completions",
                 "demo-key",
-                "google/gemini-2.0-flash-001"
+                "google/gemini-2.0-flash-001",
+                "http://localhost:8080",
+                "HackathonBank"
         );
 
         assertThatThrownBy(() -> client.complete(List.of(new ChatMessageDto("user", "Привет"))))

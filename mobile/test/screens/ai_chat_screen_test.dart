@@ -17,6 +17,7 @@ void main() {
         home: AiChatScreen(apiService: apiService),
       ),
     );
+    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.byType(TextField),

@@ -929,11 +929,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                         : _toggleAdminMode,
                   ),
                   ActionCircleButton(
-                    icon: Icons.account_balance_wallet_rounded,
-                    isLoading: _isCreatingLoan,
-                    onTap: _openCreateLoanSheet,
-                  ),
-                  ActionCircleButton(
                     icon: Icons.qr_code_rounded,
                     isLoading: _isCreatingTransaction,
                     onTap: _openCreateTransactionSheet,

@@ -1,7 +1,6 @@
 package com.example.hackathonbank.service;
 
 import com.example.hackathonbank.ai.ActionExecutionResult;
-import com.example.hackathonbank.ai.AgentActionType;
 import com.example.hackathonbank.controller.dto.ScheduledPaymentRequest;
 import com.example.hackathonbank.controller.dto.ScheduledPaymentResponse;
 import com.example.hackathonbank.model.Account;
@@ -120,7 +119,7 @@ public class ScheduledPaymentService {
                 .ifPresent(transaction -> transaction.reschedule(payment.getDueDate()));
 
         return new ActionExecutionResult(
-                AgentActionType.POSTPONE_PAYMENT.name(),
+                "POSTPONE_PAYMENT",
                 "Платеж \"%s\" перенесен на %s.".formatted(payment.getTitle(), payment.getDueDate()),
                 accountService.getAccountByType(AccountType.MAIN).getBalance(),
                 accountService.getAccountByType(AccountType.SAVINGS).getBalance()
@@ -143,7 +142,7 @@ public class ScheduledPaymentService {
                 .ifPresent(transaction -> transaction.reschedule(targetDate)));
 
         return new ActionExecutionResult(
-                AgentActionType.POSTPONE_PAYMENT.name(),
+                "POSTPONE_PAYMENT",
                 "Перенесено %d платежей на %s.".formatted(payments.size(), targetDate),
                 accountService.getAccountByType(AccountType.MAIN).getBalance(),
                 accountService.getAccountByType(AccountType.SAVINGS).getBalance()
