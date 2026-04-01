@@ -43,6 +43,13 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
   late final CurvedAnimation _chartAnimation;
   int _touchedPieIndex = -1;
 
+  late List<TransactionModel> _sortedTransactions;
+  late DateTime _anchorDate;
+  late List<_MonthlyBucket> _monthlyBuckets;
+  late List<_DailyNetPoint> _dailyNetSeries;
+  late List<_PieSlice> _pieSlices;
+  late _ForecastSummary _forecast;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +62,29 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       curve: Curves.easeInOut,
     );
     _animationController.forward();
+    _recomputeAnalytics();
+  }
+
+  @override
+  void didUpdateWidget(covariant DetailedAnalyticsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.transactions != widget.transactions) {
+      _recomputeAnalytics();
+    }
+  }
+
+  void _recomputeAnalytics() {
+    _sortedTransactions = widget.transactions
+        .where((transaction) => transaction.status == 'COMPLETED')
+        .toList(growable: false)
+      ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
+    _anchorDate = _sortedTransactions.isEmpty
+        ? DateTime.now()
+        : _sortedTransactions.last.occurredAt;
+    _monthlyBuckets = _buildMonthlyBuckets(_sortedTransactions, _anchorDate);
+    _dailyNetSeries = _buildDailyNetSeries(_sortedTransactions, _anchorDate);
+    _pieSlices = _buildPieSlices(_sortedTransactions, _anchorDate);
+    _forecast = _buildForecastSummary(_monthlyBuckets, _anchorDate);
   }
 
   @override
@@ -66,18 +96,10 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final transactions =
-        widget.transactions
-            .where((transaction) => transaction.status == 'COMPLETED')
-            .toList(growable: false)
-          ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-    final anchorDate = transactions.isEmpty
-        ? DateTime.now()
-        : transactions.last.occurredAt;
-    final monthlyBuckets = _buildMonthlyBuckets(transactions, anchorDate);
-    final dailyNetSeries = _buildDailyNetSeries(transactions, anchorDate);
-    final pieSlices = _buildPieSlices(transactions, anchorDate);
-    final forecast = _buildForecastSummary(monthlyBuckets, anchorDate);
+    final monthlyBuckets = _monthlyBuckets;
+    final dailyNetSeries = _dailyNetSeries;
+    final pieSlices = _pieSlices;
+    final forecast = _forecast;
     final touchedSlice =
         _touchedPieIndex >= 0 && _touchedPieIndex < pieSlices.length
         ? pieSlices[_touchedPieIndex]

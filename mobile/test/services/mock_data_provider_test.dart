@@ -3,7 +3,7 @@ import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/scheduled_payment_model.dart';
 import 'package:hackathon_bank_mobile/models/transaction_model.dart';
 import 'package:hackathon_bank_mobile/services/api_client.dart';
-import 'package:hackathon_bank_mobile/services/mock_data_provider.dart';
+import '../test_support/mock_data_provider.dart';
 
 import '../test_support/fake_bank_api_service.dart';
 

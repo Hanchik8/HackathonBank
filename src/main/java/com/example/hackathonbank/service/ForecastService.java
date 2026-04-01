@@ -34,11 +34,6 @@ public class ForecastService {
         this.userSettingsService = userSettingsService;
     }
 
-    public ForecastService(AccountService accountService,
-                           ScheduledPaymentService scheduledPaymentService) {
-        this(accountService, scheduledPaymentService, null);
-    }
-
     public AiDashboardResponse buildDashboard(int offsetDays) {
         int horizonDays = Math.max(0, offsetDays);
         Account mainAccount = accountService.getAccountByType(AccountType.MAIN);
@@ -96,6 +91,6 @@ public class ForecastService {
     }
 
     private LocalDate currentDate() {
-        return userSettingsService == null ? LocalDate.now() : userSettingsService.currentDate();
+        return userSettingsService.currentDate();
     }
 }

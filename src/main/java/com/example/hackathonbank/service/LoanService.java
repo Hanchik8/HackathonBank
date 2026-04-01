@@ -17,6 +17,8 @@ import java.math.BigDecimal;
 @Service
 public class LoanService {
 
+    private static final BigDecimal DEFAULT_INTEREST_MULTIPLIER = new BigDecimal("1.12");
+
     private final AccountService accountService;
     private final AccountRepository accountRepository;
     private final TransactionRepository transactionRepository;
@@ -66,7 +68,7 @@ public class LoanService {
                 "%s · Погашение".formatted(request.title().trim()),
                 "MBank",
                 "Кредит",
-                request.amount().multiply(new BigDecimal("1.12")),
+                request.amount().multiply(DEFAULT_INTEREST_MULTIPLIER),
                 request.dueDate(),
                 true
         ));

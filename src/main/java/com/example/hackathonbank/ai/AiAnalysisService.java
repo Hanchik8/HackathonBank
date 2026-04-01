@@ -417,7 +417,7 @@ public class AiAnalysisService {
 
     private ActionExecutionResult closeDeposit() {
         Account savings = accountService.getAccountByType(AccountType.SAVINGS);
-        return bankingAgentTools.autoTransferFromSavings(savings.getBalance().doubleValue());
+        return bankingAgentTools.autoTransferFromSavings(savings.getBalance().toPlainString());
     }
 
     private ActionExecutionResult postponeSingle(String[] parts) {

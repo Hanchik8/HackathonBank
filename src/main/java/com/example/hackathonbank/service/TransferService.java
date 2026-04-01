@@ -1,7 +1,6 @@
 package com.example.hackathonbank.service;
 
 import com.example.hackathonbank.ai.ActionExecutionResult;
-import com.example.hackathonbank.ai.AgentActionType;
 import com.example.hackathonbank.controller.dto.ExternalTransferRequest;
 import com.example.hackathonbank.controller.dto.ExternalTransferResponse;
 import com.example.hackathonbank.controller.dto.TransferRequest;
@@ -50,13 +49,6 @@ public class TransferService {
         this.userContextService = userContextService;
         this.smartCategoryService = smartCategoryService;
         this.userSettingsService = userSettingsService;
-    }
-
-    public TransferService(AccountRepository accountRepository,
-                           TransactionRepository transactionRepository,
-                           AccountService accountService,
-                           UserContextService userContextService) {
-        this(accountRepository, transactionRepository, accountService, userContextService, null, null);
     }
 
     @Transactional
@@ -132,7 +124,7 @@ public class TransferService {
         executeTransfer(userContextService.getCurrentUser(), savings, main, amount, "AI резерв", currentDateTime());
 
         return new ActionExecutionResult(
-                AgentActionType.AUTO_TRANSFER.name(),
+                "AUTO_TRANSFER",
                 "Со счета сбережений переведено %s KGS, чтобы закрыть кассовый разрыв.".formatted(amount.toPlainString()),
                 main.getBalance(),
                 savings.getBalance()
@@ -207,7 +199,7 @@ public class TransferService {
     }
 
     private SmartCategory resolveSmartCategory(String smartCategoryId) {
-        if (!StringUtils.hasText(smartCategoryId) || smartCategoryService == null) {
+        if (!StringUtils.hasText(smartCategoryId)) {
             return null;
         }
         return smartCategoryService.getOwnedCategory(smartCategoryId.trim());
@@ -220,9 +212,6 @@ public class TransferService {
     }
 
     private LocalDateTime currentDateTime() {
-        if (userSettingsService == null) {
-            return LocalDateTime.now().withSecond(0).withNano(0);
-        }
         return userSettingsService.currentDate().atTime(12, 0);
     }
 

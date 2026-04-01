@@ -121,13 +121,4 @@ public class SmartCategoryService {
                 ));
     }
 
-    private LocalDateTime currentMonthStart() {
-        LocalDate currentDate = userSettingsService.currentDate();
-        return currentDate.withDayOfMonth(1).atStartOfDay();
-    }
-
-    private LocalDateTime currentMonthEnd() {
-        LocalDate currentDate = userSettingsService.currentDate();
-        return currentDate.atTime(23, 59, 59);
-    }
 }

@@ -19,8 +19,8 @@ public class BankingAgentTools {
     }
 
     @Tool(description = "Перевести деньги со счета сбережений на основной счет, чтобы закрыть кассовый разрыв.")
-    public ActionExecutionResult autoTransferFromSavings(double amount) {
-        return transferService.autoTransferFromSavings(BigDecimal.valueOf(amount));
+    public ActionExecutionResult autoTransferFromSavings(String amount) {
+        return transferService.autoTransferFromSavings(new BigDecimal(amount));
     }
 
     @Tool(description = "Перенести запланированный платеж на семь дней, чтобы избежать кассового разрыва.")

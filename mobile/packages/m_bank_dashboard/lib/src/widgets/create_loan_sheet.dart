@@ -24,10 +24,12 @@ class CreateLoanSheet extends StatefulWidget {
     super.key,
     required this.accounts,
     required this.initialOffsetDays,
+    this.referenceDate,
   });
 
   final List<AccountModel> accounts;
   final int initialOffsetDays;
+  final DateTime? referenceDate;
 
   @override
   State<CreateLoanSheet> createState() => _CreateLoanSheetState();
@@ -46,11 +48,11 @@ class _CreateLoanSheetState extends State<CreateLoanSheet> {
   void initState() {
     super.initState();
     _accountId = widget.accounts.first.id;
-    final today = DateTime.now();
+    final base = widget.referenceDate ?? DateTime.now();
     _selectedDate = DateTime(
-      today.year,
-      today.month,
-      today.day,
+      base.year,
+      base.month,
+      base.day,
     ).add(Duration(days: widget.initialOffsetDays));
   }
 
@@ -62,13 +64,13 @@ class _CreateLoanSheetState extends State<CreateLoanSheet> {
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final firstDate = DateTime(now.year, now.month, now.day);
+    final base = widget.referenceDate ?? DateTime.now();
+    final firstDate = DateTime(base.year, base.month, base.day);
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate.isBefore(firstDate) ? firstDate : _selectedDate,
       firstDate: firstDate,
-      lastDate: DateTime(now.year + 10, 12, 31),
+      lastDate: DateTime(base.year + 10, 12, 31),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(

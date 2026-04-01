@@ -24,6 +24,11 @@ class HomeScreen extends StatefulWidget {
   final int refreshSignal;
   final VoidCallback onDataChanged;
 
+  static const List<String> _monthNames = <String>[
+    'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+    'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+  ];
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -31,6 +36,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<AccountModel>? _accounts;
   List<TransactionModel>? _transactions;
+  DateTime _effectiveDate = DateTime.now();
   String? _errorMessage;
   bool _isLoading = true;
 
@@ -58,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
         widget.apiService.fetchAccounts(),
         widget.apiService.fetchTransactions(),
+        widget.apiService.getEffectiveDate(),
       ]);
 
       if (!mounted) {
@@ -67,6 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _accounts = results[0] as List<AccountModel>;
         _transactions = results[1] as List<TransactionModel>;
+        _effectiveDate = results[2] as DateTime;
         _isLoading = false;
       });
     } catch (error) {
@@ -106,8 +114,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final transactions = _transactions!;
     final mainAccount = accounts.firstWhere(
       (account) => account.type == 'MAIN',
+      orElse: () => accounts.first,
     );
-    final currentMonth = DateTime.now().month;
+    final currentMonth = _effectiveDate.month;
     final monthTransactions = transactions
         .where((transaction) => transaction.occurredAt.month == currentMonth)
         .toList();
@@ -146,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: <Widget>[
               Expanded(
                 child: _MonthSummaryCard(
-                  title: 'За март',
+                  title: 'За ${HomeScreen._monthNames[_effectiveDate.month - 1]}',
                   value: SomFormatter.amount(monthlyExpense, fractionDigits: 0),
                   segments: <SpendSegment>[
                     SpendSegment(color: AppTheme.blue, value: qrExpense),
@@ -203,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
           const SizedBox(height: 12),
           Text(
-            'Поступления за март: ${SomFormatter.amount(monthlyIncome)}',
+            'Поступления за ${HomeScreen._monthNames[_effectiveDate.month - 1]}: ${SomFormatter.amount(monthlyIncome)}',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),

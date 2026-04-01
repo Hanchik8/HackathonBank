@@ -6,6 +6,7 @@ import 'screens/app_shell.dart';
 import 'theme/app_theme.dart';
 
 void main() {
+  Intl.defaultLocale = 'ru_RU';
   runApp(const HackathonBankApp());
 }
 
@@ -16,7 +17,6 @@ class HackathonBankApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Intl.defaultLocale = 'ru_RU';
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'HackathonBank',

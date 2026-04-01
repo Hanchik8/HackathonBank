@@ -1,6 +1,5 @@
 package com.example.hackathonbank;
 
-import com.example.hackathonbank.ai.PendingActionRegistry;
 import com.example.hackathonbank.controller.dto.ExternalTransferRequest;
 import com.example.hackathonbank.controller.dto.ScheduledPaymentRequest;
 import com.example.hackathonbank.controller.dto.TransferRequest;
@@ -10,7 +9,6 @@ import com.example.hackathonbank.repository.AccountRepository;
 import com.example.hackathonbank.repository.TransactionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -46,14 +44,6 @@ class HackathonBankApplicationTests {
 
     @Autowired
     private TransactionRepository transactionRepository;
-
-    @Autowired
-    private PendingActionRegistry pendingActionRegistry;
-
-    @AfterEach
-    void tearDown() {
-        pendingActionRegistry.clear();
-    }
 
     @Test
     void accountsEndpointReturnsSeededAccounts() throws Exception {
