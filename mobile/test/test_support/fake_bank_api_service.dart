@@ -298,6 +298,8 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastSmartCategoryDraft;
   int simulateDayCalls = 0;
   bool? lastAutoDailySaveEnabled;
+  List<Map<String, String>> lastChatHistory = const <Map<String, String>>[];
+  String? lastChatMessage;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -781,6 +783,22 @@ class FakeBankApiService extends BankApiService {
       'smartCategoryId': smartCategoryId,
     };
     return _transferResult;
+  }
+
+  @override
+  Future<Map<String, String>> sendAiChatMessage({
+    required List<Map<String, String>> history,
+    required String newMessage,
+  }) async {
+    lastChatHistory = history
+        .map((message) => Map<String, String>.from(message))
+        .toList(growable: false);
+    lastChatMessage = newMessage;
+    return <String, String>{
+      'role': 'assistant',
+      'content':
+          'Safe-to-Save сейчас советует держать резерв под ближайшие платежи и не увеличивать накопления до следующего дохода.',
+    };
   }
 
   AiDashboardModel _buildDashboard(int offsetDays) {

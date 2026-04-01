@@ -7,6 +7,7 @@ import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/due_payment_banner.dart';
 import 'ai_dashboard_screen.dart';
+import 'ai_chat_screen.dart';
 import 'home_screen.dart';
 import 'placeholder_screen.dart';
 import 'transfers_screen.dart';
@@ -236,6 +237,19 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
       ),
+      floatingActionButton: _currentIndex == 0
+          ? FloatingActionButton(
+              heroTag: 'ai-chat-fab',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => AiChatScreen(apiService: _apiService),
+                ),
+              ),
+              backgroundColor: AppTheme.accent,
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.smart_toy_rounded),
+            )
+          : null,
       bottomNavigationBar: _MbankBottomBar(
         currentIndex: _currentIndex,
         favoriteCategories: _favoriteSmartCategories,

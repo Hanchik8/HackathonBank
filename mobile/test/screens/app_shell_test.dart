@@ -4,6 +4,7 @@ import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
 import 'package:hackathon_bank_mobile/models/scheduled_payment_model.dart';
 import 'package:hackathon_bank_mobile/models/smart_category_model.dart';
 import 'package:hackathon_bank_mobile/screens/app_shell.dart';
+import 'package:hackathon_bank_mobile/screens/ai_chat_screen.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
 
 import '../test_support/fake_bank_api_service.dart';
@@ -128,5 +129,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.account_balance_wallet_rounded), findsOneWidget);
+  });
+
+  testWidgets('opens ai chat from home fab', (WidgetTester tester) async {
+    final apiService = FakeBankApiService();
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: AppShell(apiService: apiService),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.smart_toy_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.smart_toy_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiChatScreen), findsOneWidget);
   });
 }

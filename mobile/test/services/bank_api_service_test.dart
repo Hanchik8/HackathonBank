@@ -252,6 +252,40 @@ void main() {
     );
   });
 
+  test('sendAiChatMessage posts stateless history and parses assistant reply', () async {
+    final fakeApiClient = _FakeApiClient(
+      <String, dynamic>{},
+      <String, dynamic>{
+        '/ai/chat': <String, dynamic>{
+          'message': <String, dynamic>{
+            'role': 'assistant',
+            'content': 'Сейчас важнее держать резерв под аренду.',
+          },
+        },
+      },
+    );
+    final apiService = BankApiService(apiClient: fakeApiClient);
+
+    final reply = await apiService.sendAiChatMessage(
+      history: const <Map<String, String>>[
+        <String, String>{'role': 'user', 'content': 'Покажи сводку'},
+      ],
+      newMessage: 'Что делать до зарплаты?',
+    );
+
+    expect(reply['role'], 'assistant');
+    expect(reply['content'], 'Сейчас важнее держать резерв под аренду.');
+    expect(
+      fakeApiClient.postBodies['/ai/chat'],
+      <String, dynamic>{
+        'history': const <Map<String, String>>[
+          <String, String>{'role': 'user', 'content': 'Покажи сводку'},
+        ],
+        'newMessage': 'Что делать до зарплаты?',
+      },
+    );
+  });
+
   test('executeAction posts token and maps response', () async {
     final fakeApiClient = _FakeApiClient(
       <String, dynamic>{},

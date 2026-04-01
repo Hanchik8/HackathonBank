@@ -76,6 +76,40 @@ class BankApiService {
     return AiAnalysisModel.fromJson(json);
   }
 
+  Future<Map<String, String>> sendAiChatMessage({
+    required List<Map<String, String>> history,
+    required String newMessage,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/ai/chat',
+              body: <String, dynamic>{
+                'history': history,
+                'newMessage': newMessage,
+              },
+            )
+            as Map<String, dynamic>;
+    final message = json['message'] as Map<String, dynamic>? ?? const {};
+    return <String, String>{
+      'role': message['role'] as String? ?? 'assistant',
+      'content': message['content'] as String? ?? '',
+    };
+  }
+
+  Future<List<Map<String, String>>> fetchAiChatHistory() async {
+    final json = await _apiClient.getJson('/ai/chat/history');
+    if (json is! List<dynamic>) {
+      return const <Map<String, String>>[];
+    }
+    return json.map((item) {
+      final message = item as Map<String, dynamic>;
+      return <String, String>{
+        'role': message['role'] as String? ?? 'assistant',
+        'content': message['content'] as String? ?? '',
+      };
+    }).toList(growable: false);
+  }
+
   Future<AiExecutionModel> executeAction(String actionToken) async {
     final json =
         await _apiClient.postJson(

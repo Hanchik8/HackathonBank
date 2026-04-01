@@ -345,6 +345,22 @@ class HackathonBankApplicationTests {
     }
 
     @Test
+    void saveSuggestionEndpointReturnsCompatibilityPayload() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/save-suggestion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").exists())
+                .andExpect(jsonPath("$.reason").isString())
+                .andExpect(jsonPath("$.safetyReserve").exists());
+    }
+
+    @Test
+    void missingRouteReturnsNotFoundInsteadOfInternalServerError() throws Exception {
+        mockMvc.perform(get("/api/v1/ai/route-that-does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Ресурс не найден."));
+    }
+
+    @Test
     void simulateDayAdvancesVirtualDateAndExecutesDailySaveWhenEnabled() throws Exception {
         var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
 
