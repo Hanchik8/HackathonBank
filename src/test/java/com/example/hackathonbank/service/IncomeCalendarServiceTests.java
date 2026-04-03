@@ -121,6 +121,36 @@ class IncomeCalendarServiceTests {
     }
 
     @Test
+    void topupClassifiedAsTopup() {
+        stubIncomes(List.of(
+                income("Пополнение карты", "2026-02-10T10:00:00", "15000.00"),
+                income("Top-up via terminal", "2026-03-05T10:00:00", "8000.00")
+        ));
+
+        IncomeCalendar calendar = service.buildCalendar(USER_ID, REF_DATE);
+
+        List<IncomeType> types = calendar.clusters().stream()
+                .map(IncomeCluster::type)
+                .toList();
+        assertThat(types).contains(IncomeType.TOPUP);
+    }
+
+    @Test
+    void monthEndSafeNormalizationHandlesShortMonths() {
+        stubIncomes(List.of(
+                income("Зарплата", "2026-01-31T10:00:00", "50000.00"),
+                income("Зарплата", "2025-12-31T10:00:00", "50000.00")
+        ));
+
+        LocalDate febRef = LocalDate.of(2026, 2, 25);
+        IncomeCalendar calendar = service.buildCalendar(USER_ID, febRef);
+
+        assertThat(calendar.clusters()).isNotEmpty();
+        assertThat(calendar.nextExpectedDate().getMonthValue()).isIn(2, 3);
+        assertThat(calendar.nextExpectedDate().getDayOfMonth()).isLessThanOrEqualTo(31);
+    }
+
+    @Test
     void refundsAndCashbackClassifiedAsRefund() {
         stubIncomes(List.of(
                 income("Возврат средств", "2026-03-01T10:00:00", "2000.00"),

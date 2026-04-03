@@ -73,6 +73,10 @@ public class ScheduledPaymentService {
         String counterparty = normalizeCounterparty(request.counterparty(), request.title());
         String iconKey = resolveIconKey(request.category(), request.title(), counterparty);
 
+        boolean flexible = request.flexible() != null
+                ? request.flexible()
+                : ScheduledPayment.classifyFlexibility(request.title(), request.category());
+
         ScheduledPayment payment = scheduledPaymentRepository.save(new ScheduledPayment(
                 user,
                 account,
@@ -83,7 +87,8 @@ public class ScheduledPaymentService {
                 iconKey,
                 request.dueDate(),
                 Boolean.TRUE.equals(request.isReminder()),
-                PaymentStatus.SCHEDULED
+                PaymentStatus.SCHEDULED,
+                flexible
         ));
 
         transactionRepository.save(new Transaction(

@@ -123,11 +123,18 @@ public class ForecastService {
             if (cluster.confidence() < 50.0) {
                 continue;
             }
-            if (date.getDayOfMonth() == cluster.dayOfMonth()) {
+            if (matchesClusterDay(date, cluster)) {
                 income = income.add(cluster.averageAmount());
             }
         }
         return income;
+    }
+
+    private boolean matchesClusterDay(LocalDate date, IncomeCalendarService.IncomeCluster cluster) {
+        int normalizedDay = Math.min(cluster.dayOfMonth(), date.lengthOfMonth());
+        int tolerance = cluster.confidence() >= 100.0 ? 1 : 2;
+        int actualDay = date.getDayOfMonth();
+        return Math.abs(actualDay - normalizedDay) <= tolerance;
     }
 
     private LocalDate currentDate() {

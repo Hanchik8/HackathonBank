@@ -74,7 +74,8 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
   @override
   void didUpdateWidget(covariant DetailedAnalyticsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.transactions != widget.transactions) {
+    if (oldWidget.transactions != widget.transactions ||
+        oldWidget.backendForecastPoints != widget.backendForecastPoints) {
       _recomputeAnalytics();
     }
   }
@@ -204,10 +205,11 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
               ),
             ),
             const SizedBox(height: 24),
-            const _SectionHeader(
+            _SectionHeader(
               title: 'Прогноз на 30 дней',
-              subtitle:
-                  'Линейная регрессия по доходам и расходам последних 3 месяцев.',
+              subtitle: widget.backendForecastPoints != null
+                  ? 'Событийная модель на основе данных сервера.'
+                  : 'Линейная регрессия по доходам и расходам последних 3 месяцев.',
             ),
             const SizedBox(height: 14),
             _GlassChartCard(

@@ -28,9 +28,12 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +73,12 @@ class DailySavingsServiceTests {
     @Mock
     private AiCallExecutor aiCallExecutor;
 
+    @Mock
+    private IncomeCalendarService incomeCalendarService;
+
+    @Mock
+    private SpendProfileService spendProfileService;
+
     private DailySavingsService dailySavingsService;
 
     @BeforeEach
@@ -84,14 +93,17 @@ class DailySavingsServiceTests {
                 aiCapabilityService,
                 aiChatClient,
                 aiCallExecutor,
-                new ObjectMapper()
+                new ObjectMapper(),
+                incomeCalendarService,
+                spendProfileService
         );
     }
 
     @Test
     void previewCalculatesFivePercentOfSafeBalance() {
         User user = user(1L);
-        UserSettings settings = new UserSettings(user, true, true, false, LocalDate.of(2026, 3, 10));
+        LocalDate currentDate = LocalDate.of(2026, 3, 10);
+        UserSettings settings = new UserSettings(user, true, true, false, currentDate);
         Account main = account(user, 1L, AccountType.MAIN, "Main", "20000.00");
         Account savings = account(user, 2L, AccountType.SAVINGS, "Savings", "50000.00");
         ScheduledPayment rent = scheduledPayment(user, main, 10L, "Rent", "4000.00", LocalDate.of(2026, 3, 15));
@@ -104,16 +116,17 @@ class DailySavingsServiceTests {
                 1L,
                 List.of(PaymentStatus.SCHEDULED, PaymentStatus.POSTPONED)
         )).thenReturn(List.of(rent));
-        when(transactionRepository.findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
-                eq(1L),
-                eq(TransactionStatus.COMPLETED),
-                any(LocalDateTime.class),
-                any(LocalDateTime.class)
-        )).thenReturn(List.of(
-                income(user, main, "Salary A", "2026-01-15T10:00:00", "90000.00"),
-                income(user, main, "Salary B", "2026-02-15T10:00:00", "90000.00"),
-                expense(user, main, "Groceries", "2026-03-09T12:00:00", "3000.00")
-        ));
+        when(incomeCalendarService.buildCalendar(eq(1L), eq(currentDate)))
+                .thenReturn(new IncomeCalendarService.IncomeCalendar(
+                        List.of(new IncomeCalendarService.IncomeCluster(IncomeType.SALARY, 15, new BigDecimal("90000.00"), 2, 66.0)),
+                        LocalDate.of(2026, 3, 15), 66,
+                        LocalDate.of(2026, 3, 13), LocalDate.of(2026, 3, 17)
+                ));
+        when(spendProfileService.buildProfile(eq(1L), eq(currentDate)))
+                .thenReturn(new SpendProfileService.SpendProfile(
+                        new BigDecimal("60.00"), new BigDecimal("40.00"),
+                        uniformMultipliers(), BigDecimal.ZERO
+                ));
 
         DailySavingsPreviewResponse preview = dailySavingsService.previewForCurrentUser();
 
@@ -128,7 +141,8 @@ class DailySavingsServiceTests {
     @Test
     void previewReturnsZeroWhenMainBalanceBelowThreshold() {
         User user = user(1L);
-        UserSettings settings = new UserSettings(user, true, false, false, LocalDate.of(2026, 3, 10));
+        LocalDate currentDate = LocalDate.of(2026, 3, 10);
+        UserSettings settings = new UserSettings(user, true, false, false, currentDate);
         Account main = account(user, 1L, AccountType.MAIN, "Main", "900.00");
         Account savings = account(user, 2L, AccountType.SAVINGS, "Savings", "50000.00");
 
@@ -136,6 +150,11 @@ class DailySavingsServiceTests {
         when(userSettingsRepository.findByUserId(1L)).thenReturn(Optional.of(settings));
         when(accountRepository.findByUserIdAndType(1L, AccountType.MAIN)).thenReturn(Optional.of(main));
         when(accountRepository.findByUserIdAndType(1L, AccountType.SAVINGS)).thenReturn(Optional.of(savings));
+        when(incomeCalendarService.buildCalendar(eq(1L), any(LocalDate.class)))
+                .thenReturn(new IncomeCalendarService.IncomeCalendar(
+                        List.of(), currentDate.plusDays(14), 0,
+                        currentDate.plusDays(14), currentDate.plusDays(14)
+                ));
 
         DailySavingsPreviewResponse preview = dailySavingsService.previewForCurrentUser();
 
@@ -151,6 +170,7 @@ class DailySavingsServiceTests {
         Account main = account(user, 1L, AccountType.MAIN, "Main", "30000.00");
         Account savings = account(user, 2L, AccountType.SAVINGS, "Savings", "55000.00");
         ScheduledPayment payment = scheduledPayment(user, main, 10L, "Internet", "2000.00", LocalDate.of(2026, 3, 12));
+        LocalDate nextDay = LocalDate.of(2026, 3, 11);
 
         when(userContextService.getCurrentUser()).thenReturn(user);
         when(userSettingsRepository.findByUserId(1L)).thenReturn(Optional.of(settings));
@@ -160,6 +180,17 @@ class DailySavingsServiceTests {
                 1L,
                 List.of(PaymentStatus.SCHEDULED, PaymentStatus.POSTPONED)
         )).thenReturn(List.of(payment));
+        when(incomeCalendarService.buildCalendar(eq(1L), eq(nextDay)))
+                .thenReturn(new IncomeCalendarService.IncomeCalendar(
+                        List.of(new IncomeCalendarService.IncomeCluster(IncomeType.SALARY, 13, new BigDecimal("90000.00"), 2, 66.0)),
+                        LocalDate.of(2026, 3, 13), 66,
+                        LocalDate.of(2026, 3, 11), LocalDate.of(2026, 3, 15)
+                ));
+        when(spendProfileService.buildProfile(eq(1L), eq(nextDay)))
+                .thenReturn(new SpendProfileService.SpendProfile(
+                        new BigDecimal("60.00"), new BigDecimal("40.00"),
+                        uniformMultipliers(), BigDecimal.ZERO
+                ));
         when(transactionRepository.findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
                 eq(1L),
                 eq(TransactionStatus.COMPLETED),
@@ -171,7 +202,7 @@ class DailySavingsServiceTests {
                 expense(user, main, "Transport", "2026-03-09T12:00:00", "1000.00")
         ));
         when(aiCapabilityService.isLiveAiEnabled()).thenReturn(false);
-        when(transferService.autoSaveToSavings(eq(user), any(BigDecimal.class), eq(LocalDate.of(2026, 3, 11))))
+        when(transferService.autoSaveToSavings(eq(user), any(BigDecimal.class), eq(nextDay)))
                 .thenAnswer(invocation -> {
                     BigDecimal amount = invocation.getArgument(1);
                     main.setBalance(main.getBalance().subtract(amount));
@@ -181,12 +212,12 @@ class DailySavingsServiceTests {
 
         DemoSimulateDayResponse response = dailySavingsService.simulateNextDayForCurrentUser();
 
-        assertThat(response.currentDate()).isEqualTo(LocalDate.of(2026, 3, 11));
+        assertThat(response.currentDate()).isEqualTo(nextDay);
         assertThat(response.autoSaveExecuted()).isTrue();
         assertThat(response.savedAmount()).isPositive();
         assertThat(response.notification()).contains("Safe-to-Save");
         verify(userSettingsRepository).save(settings);
-        verify(transferService).autoSaveToSavings(eq(user), any(BigDecimal.class), eq(LocalDate.of(2026, 3, 11)));
+        verify(transferService).autoSaveToSavings(eq(user), any(BigDecimal.class), eq(nextDay));
     }
 
     private User user(Long id) {
@@ -237,6 +268,14 @@ class DailySavingsServiceTests {
                 TransactionStatus.COMPLETED,
                 LocalDateTime.parse(occurredAt)
         );
+    }
+
+    private Map<DayOfWeek, BigDecimal> uniformMultipliers() {
+        Map<DayOfWeek, BigDecimal> m = new EnumMap<>(DayOfWeek.class);
+        for (DayOfWeek dow : DayOfWeek.values()) {
+            m.put(dow, BigDecimal.ONE);
+        }
+        return m;
     }
 
     private Transaction expense(User user, Account account, String title, String occurredAt, String amount) {

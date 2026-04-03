@@ -1,1 +1,1 @@
-ALTER TABLE scheduled_payments ADD COLUMN flexible BOOLEAN NOT NULL DEFAULT TRUE;
+-- flexible column already included in V1; this migration is intentionally empty.

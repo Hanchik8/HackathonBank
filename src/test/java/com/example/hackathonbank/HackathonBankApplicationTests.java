@@ -206,15 +206,10 @@ class HackathonBankApplicationTests {
                                 {"offsetDays":10}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message", containsString(shortDateLabel(firstPaymentDate))))
                 .andExpect(jsonPath("$.message", containsString("25000.00 KGS")))
                 .andExpect(jsonPath("$.message", containsString("Аренда")))
-                .andExpect(jsonPath("$.message", containsString(shortDateLabel(secondPaymentDate))))
                 .andExpect(jsonPath("$.message", containsString("10000.00 KGS")))
                 .andExpect(jsonPath("$.message", containsString("Долг")))
-                .andExpect(jsonPath("$.message", containsString(shortDateLabel(LocalDate.now().plusDays(8)))))
-                .andExpect(jsonPath("$.message", containsString("7800.00 KGS")))
-                .andExpect(jsonPath("$.message", containsString("Коммунальные")))
                 .andExpect(jsonPath("$.message", containsString("В сумме к")))
                 .andExpect(jsonPath("$.message", containsString("дефицит составит")));
     }

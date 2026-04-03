@@ -79,16 +79,14 @@ public class IncomeCalendarService {
                     (t.getCounterparty() != null ? t.getCounterparty() : "")).toLowerCase(Locale.ROOT);
 
             IncomeType type;
-            if (amount.compareTo(SALARY_THRESHOLD) >= 0 && isLikelySalary(text)) {
-                type = IncomeType.SALARY;
+            if (isLikelyRefund(text)) {
+                type = IncomeType.REFUND;
+            } else if (isLikelyTopup(text)) {
+                type = IncomeType.TOPUP;
             } else if (amount.compareTo(SALARY_THRESHOLD) >= 0) {
                 type = IncomeType.SALARY;
-            } else if (amount.compareTo(TOPUP_LOWER) >= 0 && amount.compareTo(SALARY_THRESHOLD) < 0) {
-                type = isLikelyRefund(text) ? IncomeType.REFUND : IncomeType.FREELANCE;
-            } else if (amount.compareTo(REFUND_UPPER) < 0 && isLikelyRefund(text)) {
-                type = IncomeType.REFUND;
-            } else if (amount.compareTo(REFUND_UPPER) < 0) {
-                type = IncomeType.OTHER;
+            } else if (amount.compareTo(TOPUP_LOWER) >= 0) {
+                type = isLikelySalary(text) ? IncomeType.SALARY : IncomeType.FREELANCE;
             } else {
                 type = IncomeType.OTHER;
             }
@@ -102,6 +100,10 @@ public class IncomeCalendarService {
 
     private boolean isLikelyRefund(String text) {
         return containsAny(text, "возврат", "кэшбэк", "cashback", "refund", "бонус");
+    }
+
+    private boolean isLikelyTopup(String text) {
+        return containsAny(text, "пополнен", "top-up", "topup", "top up", "deposit", "внесен");
     }
 
     private List<IncomeCluster> buildClusters(List<ClassifiedIncome> classified) {
