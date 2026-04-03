@@ -13,9 +13,11 @@ void main() {
     WidgetTester tester,
   ) async {
     final now = DateTime.now();
-    final expectedHorizon = DateTime(now.year, now.month + 1, 0)
-        .difference(DateTime(now.year, now.month, now.day))
-        .inDays;
+    final expectedHorizon = DateTime(
+      now.year,
+      now.month + 1,
+      0,
+    ).difference(DateTime(now.year, now.month, now.day)).inDays;
     final apiService = FakeBankApiService();
     final repository = BankApiDashboardRepository(apiService: apiService);
     var refreshCount = 0;
@@ -87,10 +89,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).at(0), 'Страхование');
-    await tester.enterText(
-      find.byType(TextField).at(1),
-      'Страховая компания',
-    );
+    await tester.enterText(find.byType(TextField).at(1), 'Страховая компания');
     await tester.enterText(find.byType(TextField).at(2), '4200');
 
     await tester.scrollUntilVisible(
@@ -107,70 +106,27 @@ void main() {
     expect(refreshCount, 1);
   });
 
-  testWidgets('dashboard creates loan and refreshes data immediately', (
-    WidgetTester tester,
-  ) async {
-    final apiService = FakeBankApiService();
-    final repository = BankApiDashboardRepository(apiService: apiService);
-    var refreshCount = 0;
-
-    await tester.binding.setSurfaceSize(const Size(430, 932));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: Scaffold(
-          body: AiDashboardScreen(
-            repository: repository,
-            refreshSignal: 0,
-            onDataChanged: () => refreshCount += 1,
+  testWidgets(
+    'transaction sheet hides category picker when smart list disabled',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: TransactionCaptureSheet(
+              accounts: sampleAccounts(),
+              smartCategories: sampleSmartCategories(),
+              smartListEnabled: false,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.account_balance_wallet_rounded));
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField).at(0), 'Bridge loan');
-    await tester.enterText(find.byType(TextField).at(1), '12500');
-
-    final createLoanButton = find.byType(ElevatedButton).last;
-    await tester.scrollUntilVisible(
-      createLoanButton,
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(createLoanButton);
-    await tester.pumpAndSettle();
-
-    expect(apiService.createLoanCalls, 1);
-    expect(apiService.lastLoanDraft?['title'], 'Bridge loan');
-    expect(apiService.dashboardRequests.length, greaterThan(1));
-    expect(refreshCount, 1);
-  });
-
-  testWidgets('transaction sheet hides category picker when smart list disabled', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.darkTheme,
-        home: Scaffold(
-          body: TransactionCaptureSheet(
-            accounts: sampleAccounts(),
-            smartCategories: sampleSmartCategories(),
-            smartListEnabled: false,
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
-    expect(find.byType(DropdownButtonFormField<String?>), findsNothing);
-  });
+      expect(find.byType(DropdownButtonFormField<int>), findsOneWidget);
+      expect(find.byType(DropdownButtonFormField<String?>), findsNothing);
+    },
+  );
 
   testWidgets('dashboard toggles auto save and advances one day per tap', (
     WidgetTester tester,

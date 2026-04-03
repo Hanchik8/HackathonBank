@@ -15,7 +15,6 @@ import '../widgets/admin_mode_sheet.dart';
 import '../widgets/analysis_category_row.dart';
 import '../widgets/analysis_insight_card.dart';
 import '../widgets/balance_advice_card.dart';
-import '../widgets/create_loan_sheet.dart';
 import '../widgets/forecast_chart.dart';
 import '../widgets/mini_badge.dart';
 import '../widgets/scheduled_payment_form_sheet.dart';
@@ -71,7 +70,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   bool _isLoading = true;
   bool _isExecuting = false;
   bool _isCreatingPayment = false;
-  bool _isCreatingLoan = false;
   bool _isCreatingTransaction = false;
   bool _isCreatingCategory = false;
   bool _isTogglingSmartList = false;
@@ -360,72 +358,6 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       if (mounted) {
         setState(() {
           _deletingPaymentId = null;
-        });
-      }
-    }
-  }
-
-  Future<void> _openCreateLoanSheet() async {
-    final accounts = _accounts;
-    if (accounts == null || accounts.isEmpty || _isCreatingLoan) {
-      return;
-    }
-
-    final draft = await showModalBottomSheet<LoanDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => CreateLoanSheet(
-        accounts: accounts,
-        initialOffsetDays: _initialSheetOffset(),
-        referenceDate: _effectiveDate,
-      ),
-    );
-
-    if (draft == null) {
-      return;
-    }
-
-    await _createLoan(draft);
-  }
-
-  Future<void> _createLoan(LoanDraft draft) async {
-    if (_isCreatingLoan) {
-      return;
-    }
-
-    setState(() {
-      _isCreatingLoan = true;
-    });
-
-    try {
-      await widget.repository.createLoan(
-        accountId: draft.accountId,
-        title: draft.title,
-        amount: draft.amount,
-        dueDate: draft.dueDate,
-      );
-      if (!mounted) {
-        return;
-      }
-
-      final dueInDays = _daysUntil(draft.dueDate);
-      final maxDays = _daysUntilEndOfMonth();
-      if (dueInDays > _offsetDays && dueInDays <= maxDays) {
-        _offsetDays = dueInDays;
-      }
-      widget.onDataChanged();
-      _showMessage('Кредит создан. Прогноз обновлен.');
-      await _refreshFinancialState();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(error.toString());
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isCreatingLoan = false;
         });
       }
     }
