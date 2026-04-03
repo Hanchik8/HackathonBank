@@ -9,6 +9,8 @@ class NotificationModel {
     required this.isRead,
     required this.type,
     this.amount,
+    this.transactionId,
+    this.smartCategoryHint,
   });
 
   final String id;
@@ -18,6 +20,35 @@ class NotificationModel {
   final DateTime timestamp;
   final bool isRead;
   final NotificationType type;
+  final int? transactionId;
+  final String? smartCategoryHint;
+
+  bool get canAddToSmartList =>
+      transactionId != null && (amount ?? 0) < 0 && type == NotificationType.debit;
+
+  NotificationModel copyWith({
+    String? id,
+    String? title,
+    String? body,
+    double? amount,
+    DateTime? timestamp,
+    bool? isRead,
+    NotificationType? type,
+    int? transactionId,
+    String? smartCategoryHint,
+  }) {
+    return NotificationModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      amount: amount ?? this.amount,
+      timestamp: timestamp ?? this.timestamp,
+      isRead: isRead ?? this.isRead,
+      type: type ?? this.type,
+      transactionId: transactionId ?? this.transactionId,
+      smartCategoryHint: smartCategoryHint ?? this.smartCategoryHint,
+    );
+  }
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
@@ -30,6 +61,8 @@ class NotificationModel {
           DateTime.fromMillisecondsSinceEpoch(0),
       isRead: json['isRead'] as bool? ?? false,
       type: _notificationTypeFromJson(json['type'] as String?),
+      transactionId: json['transactionId'] as int?,
+      smartCategoryHint: json['smartCategoryHint'] as String?,
     );
   }
 
@@ -42,6 +75,8 @@ class NotificationModel {
       'timestamp': timestamp.toIso8601String(),
       'isRead': isRead,
       'type': type.name,
+      'transactionId': transactionId,
+      'smartCategoryHint': smartCategoryHint,
     };
   }
 

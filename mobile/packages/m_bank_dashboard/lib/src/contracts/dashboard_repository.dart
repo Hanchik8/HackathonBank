@@ -98,4 +98,6 @@ abstract class DashboardRepository {
   Future<List<SubscriptionModel>> fetchSubscriptions();
 
   Future<void> cancelSubscription(String subscriptionId);
+
+  Future<List<ForecastPointModel>> fetchForecastPoints(int days);
 }

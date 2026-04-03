@@ -137,6 +137,13 @@ void main() {
           'amount': 3000,
         },
         '/subscriptions/sub-1/cancel': null,
+        '/smart-categories/link-transaction': <String, dynamic>{
+          'id': '12',
+          'name': 'Еда',
+          'plannedMonthly': 1350,
+          'remaining': 1350,
+          'isFavorite': false,
+        },
         '/ai/auto-daily-save': <String, dynamic>{'enabled': true},
         '/demo/simulate-day': <String, dynamic>{
           'currentDate': '2026-03-13',
@@ -156,6 +163,11 @@ void main() {
     final dashboard = await apiService.fetchDashboard(7);
     final dailySafeToSave = await apiService.fetchDailySafeToSave();
     final autoDailySaveEnabled = await apiService.getAutoDailySaveEnabled();
+    final linkedCategory = await apiService.createSmartCategoryFromTransaction(
+      transactionId: 1,
+      name: 'Еда',
+      plannedMonthly: 1350,
+    );
     final createdPayment = await apiService.createScheduledPayment(
       accountId: 1,
       title: 'Internet',
@@ -189,6 +201,8 @@ void main() {
     expect(dashboard.horizonDays, 7);
     expect(dailySafeToSave.suggestedAmount, 1800);
     expect(autoDailySaveEnabled, isTrue);
+    expect(linkedCategory.id, '12');
+    expect(linkedCategory.name, 'Еда');
     expect(createdPayment.title, 'Internet');
     expect(createdPayment.isReminder, isTrue);
     expect(simulateResponse.autoSaveExecuted, isTrue);
@@ -197,6 +211,14 @@ void main() {
     expect(
       fakeApiClient.postBodies['/subscriptions/sub-1/cancel'],
       <String, dynamic>{},
+    );
+    expect(
+      fakeApiClient.postBodies['/smart-categories/link-transaction'],
+      <String, dynamic>{
+        'transactionId': 1,
+        'name': 'Еда',
+        'plannedMonthly': 1350.0,
+      },
     );
     expect(
       fakeApiClient.postBodies['/ai/auto-daily-save'],

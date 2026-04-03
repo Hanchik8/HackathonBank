@@ -296,6 +296,8 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastTransactionDraft;
   int createSmartCategoryCalls = 0;
   Map<String, Object?>? lastSmartCategoryDraft;
+  int createSmartCategoryFromTransactionCalls = 0;
+  Map<String, Object?>? lastSmartCategoryFromTransactionDraft;
   int simulateDayCalls = 0;
   bool? lastAutoDailySaveEnabled;
   List<Map<String, String>> lastChatHistory = const <Map<String, String>>[];
@@ -690,6 +692,25 @@ class FakeBankApiService extends BankApiService {
       isFavorite: false,
     );
     _smartCategories.add(category);
+    return category;
+  }
+
+  @override
+  Future<SmartCategory> createSmartCategoryFromTransaction({
+    required int transactionId,
+    required String name,
+    required double plannedMonthly,
+  }) async {
+    createSmartCategoryFromTransactionCalls += 1;
+    lastSmartCategoryFromTransactionDraft = <String, Object?>{
+      'transactionId': transactionId,
+      'name': name,
+      'plannedMonthly': plannedMonthly,
+    };
+    final category = await createSmartCategory(
+      name: name,
+      plannedMonthly: plannedMonthly,
+    );
     return category;
   }
 

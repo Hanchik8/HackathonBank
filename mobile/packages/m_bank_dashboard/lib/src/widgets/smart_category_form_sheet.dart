@@ -13,15 +13,37 @@ class SmartCategoryDraft {
 }
 
 class SmartCategoryFormSheet extends StatefulWidget {
-  const SmartCategoryFormSheet({super.key});
+  const SmartCategoryFormSheet({
+    super.key,
+    this.initialName = '',
+    this.initialPlannedMonthly,
+    this.title,
+    this.submitLabel,
+  });
+
+  final String initialName;
+  final double? initialPlannedMonthly;
+  final String? title;
+  final String? submitLabel;
 
   @override
   State<SmartCategoryFormSheet> createState() => _SmartCategoryFormSheetState();
 }
 
 class _SmartCategoryFormSheetState extends State<SmartCategoryFormSheet> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _plannedMonthlyController = TextEditingController();
+  late final TextEditingController _nameController;
+  late final TextEditingController _plannedMonthlyController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _plannedMonthlyController = TextEditingController(
+      text: widget.initialPlannedMonthly == null
+          ? ''
+          : widget.initialPlannedMonthly!.toStringAsFixed(0),
+    );
+  }
 
   @override
   void dispose() {
@@ -76,7 +98,7 @@ class _SmartCategoryFormSheetState extends State<SmartCategoryFormSheet> {
               ),
               const SizedBox(height: 18),
               Text(
-                'Новая smart-категория',
+                widget.title ?? '\u041d\u043e\u0432\u0430\u044f smart-\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044f',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -84,20 +106,27 @@ class _SmartCategoryFormSheetState extends State<SmartCategoryFormSheet> {
               const SizedBox(height: 14),
               TextField(
                 controller: _nameController,
-                decoration: _inputDecoration('Название категории'),
+                decoration: _inputDecoration(
+                  '\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438',
+                ),
               ),
               const SizedBox(height: 14),
               TextField(
                 controller: _plannedMonthlyController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: _inputDecoration('Месячный лимит в KGS'),
+                decoration: _inputDecoration(
+                  '\u041c\u0435\u0441\u044f\u0447\u043d\u044b\u0439 \u043b\u0438\u043c\u0438\u0442 \u0432 KGS',
+                ),
               ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
-                  child: const Text('Добавить категорию'),
+                  child: Text(
+                    widget.submitLabel ??
+                        '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044e',
+                  ),
                 ),
               ),
             ],

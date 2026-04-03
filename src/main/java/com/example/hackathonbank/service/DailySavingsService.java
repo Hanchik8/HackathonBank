@@ -27,11 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,10 +41,6 @@ public class DailySavingsService {
     private static final BigDecimal MINIMUM_MAIN_BALANCE = new BigDecimal("1000.00");
     private static final BigDecimal SAVE_RATIO = new BigDecimal("0.05");
     private static final BigDecimal LIFE_BUFFER_MULTIPLIER = new BigDecimal("1.20");
-    private static final int EXPENSE_WINDOW_DAYS = 30;
-    private static final int INCOME_WINDOW_DAYS = 90;
-    private static final int DEFAULT_NEXT_INCOME_DAYS = 14;
-
     private final UserContextService userContextService;
     private final UserSettingsRepository userSettingsRepository;
     private final AccountRepository accountRepository;
@@ -57,6 +51,8 @@ public class DailySavingsService {
     private final ChatClient aiChatClient;
     private final AiCallExecutor aiCallExecutor;
     private final ObjectMapper objectMapper;
+    private final IncomeCalendarService incomeCalendarService;
+    private final SpendProfileService spendProfileService;
 
     public DailySavingsService(UserContextService userContextService,
                                UserSettingsRepository userSettingsRepository,
@@ -67,7 +63,9 @@ public class DailySavingsService {
                                AiCapabilityService aiCapabilityService,
                                ChatClient aiChatClient,
                                AiCallExecutor aiCallExecutor,
-                               ObjectMapper objectMapper) {
+                               ObjectMapper objectMapper,
+                               IncomeCalendarService incomeCalendarService,
+                               SpendProfileService spendProfileService) {
         this.userContextService = userContextService;
         this.userSettingsRepository = userSettingsRepository;
         this.accountRepository = accountRepository;
@@ -78,6 +76,8 @@ public class DailySavingsService {
         this.aiChatClient = aiChatClient;
         this.aiCallExecutor = aiCallExecutor;
         this.objectMapper = objectMapper;
+        this.incomeCalendarService = incomeCalendarService;
+        this.spendProfileService = spendProfileService;
     }
 
     @Transactional(readOnly = true)
@@ -144,7 +144,8 @@ public class DailySavingsService {
     private DailySavingsCalculation calculate(User user, UserSettings settings) {
         AccountBalances balances = loadBalances(user.getId());
         LocalDate currentDate = resolveCurrentDate(settings);
-        LocalDate nextIncomeDate = predictNextIncomeDate(user.getId(), currentDate);
+        IncomeCalendarService.IncomeCalendar incomeCalendar = incomeCalendarService.buildCalendar(user.getId(), currentDate);
+        LocalDate nextIncomeDate = incomeCalendar.nextExpectedDate();
         int daysToNextIncome = Math.max(0, (int) ChronoUnit.DAYS.between(currentDate, nextIncomeDate));
 
         if (balances.main().getBalance().compareTo(MINIMUM_MAIN_BALANCE) < 0) {
@@ -170,7 +171,8 @@ public class DailySavingsService {
                 .map(ScheduledPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal averageDailySpend = averageDailySpend(user.getId(), currentDate);
+        SpendProfileService.SpendProfile spendProfile = spendProfileService.buildProfile(user.getId(), currentDate);
+        BigDecimal averageDailySpend = spendProfile.dailyTotal();
         BigDecimal lifeBuffer = averageDailySpend
                 .multiply(BigDecimal.valueOf(daysToNextIncome))
                 .multiply(LIFE_BUFFER_MULTIPLIER)
@@ -208,89 +210,6 @@ public class DailySavingsService {
         Account savings = accountRepository.findByUserIdAndType(userId, AccountType.SAVINGS)
                 .orElseThrow(() -> new IllegalStateException("Накопительный депозит не найден."));
         return new AccountBalances(main, savings);
-    }
-
-    private BigDecimal averageDailySpend(Long userId, LocalDate currentDate) {
-        LocalDateTime windowStart = currentDate.minusDays(EXPENSE_WINDOW_DAYS - 1L).atStartOfDay();
-        LocalDateTime windowEnd = currentDate.atTime(23, 59, 59);
-        BigDecimal totalExpenses = completedTransactionsInWindow(userId, windowStart, windowEnd)
-                .stream()
-                .filter(transaction -> transaction.getAmount().compareTo(BigDecimal.ZERO) < 0)
-                .map(Transaction::getAmount)
-                .map(BigDecimal::abs)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return totalExpenses
-                .divide(BigDecimal.valueOf(EXPENSE_WINDOW_DAYS), 2, RoundingMode.HALF_UP);
-    }
-
-    private LocalDate predictNextIncomeDate(Long userId, LocalDate currentDate) {
-        LocalDateTime windowStart = currentDate.minusDays(INCOME_WINDOW_DAYS).atStartOfDay();
-        LocalDateTime windowEnd = currentDate.atTime(23, 59, 59);
-        List<Transaction> incomes = completedTransactionsInWindow(userId, windowStart, windowEnd)
-                .stream()
-                .filter(transaction -> transaction.getAmount().compareTo(BigDecimal.ZERO) > 0)
-                .sorted(Comparator.comparing(Transaction::getOccurredAt))
-                .toList();
-        if (incomes.isEmpty()) {
-            return currentDate.plusDays(DEFAULT_NEXT_INCOME_DAYS);
-        }
-
-        LinkedHashMap<Integer, IncomePattern> byDayOfMonth = new LinkedHashMap<>();
-        for (Transaction income : incomes) {
-            int dayOfMonth = income.getOccurredAt().getDayOfMonth();
-            IncomePattern current = byDayOfMonth.get(dayOfMonth);
-            byDayOfMonth.put(dayOfMonth, current == null
-                    ? new IncomePattern(dayOfMonth, 1, income.getAmount())
-                    : new IncomePattern(dayOfMonth, current.occurrences() + 1, current.totalAmount().add(income.getAmount())));
-        }
-
-        LocalDate recurringCandidate = byDayOfMonth.values().stream()
-                .filter(pattern -> pattern.occurrences() >= 2)
-                .sorted(Comparator.comparing(IncomePattern::occurrences).reversed()
-                        .thenComparing(IncomePattern::totalAmount, Comparator.reverseOrder()))
-                .map(pattern -> nextOccurrence(currentDate, pattern.dayOfMonth()))
-                .filter(candidate -> candidate.isAfter(currentDate))
-                .findFirst()
-                .orElse(null);
-        if (recurringCandidate != null) {
-            return recurringCandidate;
-        }
-
-        if (incomes.size() >= 2) {
-            long totalInterval = 0;
-            for (int index = 1; index < incomes.size(); index++) {
-                totalInterval += Duration.between(
-                        incomes.get(index - 1).getOccurredAt(),
-                        incomes.get(index).getOccurredAt()
-                ).toDays();
-            }
-            long averageInterval = Math.max(1L, Math.round((double) totalInterval / (incomes.size() - 1)));
-            LocalDate candidate = incomes.get(incomes.size() - 1).getOccurredAt().toLocalDate();
-            while (!candidate.isAfter(currentDate)) {
-                candidate = candidate.plusDays(averageInterval);
-            }
-            return candidate;
-        }
-
-        return nextOccurrence(currentDate, incomes.get(incomes.size() - 1).getOccurredAt().getDayOfMonth());
-    }
-
-    private LocalDate nextOccurrence(LocalDate afterDate, int dayOfMonth) {
-        LocalDate currentMonth = afterDate.withDayOfMonth(1);
-        List<LocalDate> candidates = List.of(
-                safeDate(currentMonth.getYear(), currentMonth.getMonthValue(), dayOfMonth),
-                safeDate(currentMonth.plusMonths(1).getYear(), currentMonth.plusMonths(1).getMonthValue(), dayOfMonth),
-                safeDate(currentMonth.plusMonths(2).getYear(), currentMonth.plusMonths(2).getMonthValue(), dayOfMonth)
-        );
-        return candidates.stream()
-                .filter(candidate -> candidate.isAfter(afterDate))
-                .findFirst()
-                .orElse(candidates.get(candidates.size() - 1));
-    }
-
-    private LocalDate safeDate(int year, int month, int dayOfMonth) {
-        LocalDate monthStart = LocalDate.of(year, month, 1);
-        return LocalDate.of(year, month, Math.min(dayOfMonth, monthStart.lengthOfMonth()));
     }
 
     private UserSettings getOrCreateSettings(User user) {
@@ -438,9 +357,6 @@ public class DailySavingsService {
     }
 
     private record AccountBalances(Account main, Account savings) {
-    }
-
-    private record IncomePattern(int dayOfMonth, int occurrences, BigDecimal totalAmount) {
     }
 
     private record NotificationTransaction(

@@ -113,10 +113,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openNotificationsScreen() async {
+    final transactions = _transactions ?? const <TransactionModel>[];
+    final notifications = getMockNotifications(transactions: transactions);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            NotificationsScreen(notifications: getMockNotifications()),
+        builder: (_) => NotificationsScreen(
+          apiService: widget.apiService,
+          transactions: transactions,
+          notifications: notifications,
+          onSmartListChanged: widget.onDataChanged,
+        ),
       ),
     );
   }
@@ -137,7 +143,8 @@ class _HomeScreenState extends State<HomeScreen> {
       (account) => account.type == 'MAIN',
       orElse: () => accounts.first,
     );
-    final unreadNotifications = getMockNotifications()
+    final notifications = getMockNotifications(transactions: transactions);
+    final unreadNotifications = notifications
         .where((notification) => !notification.isRead)
         .length;
     final currentMonth = _effectiveDate.month;

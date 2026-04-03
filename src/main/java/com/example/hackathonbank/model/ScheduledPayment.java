@@ -56,6 +56,9 @@ public class ScheduledPayment {
     @Column(nullable = false)
     private PaymentStatus status;
 
+    @Column(nullable = false)
+    private boolean flexible;
+
     protected ScheduledPayment() {
     }
 
@@ -66,7 +69,7 @@ public class ScheduledPayment {
                             String category,
                             LocalDate dueDate,
                             PaymentStatus status) {
-        this(user, account, title, title, amount, category, "calendar", dueDate, true, status);
+        this(user, account, title, title, amount, category, "calendar", dueDate, true, status, classifyFlexibility(title, category));
     }
 
     public ScheduledPayment(User user,
@@ -79,6 +82,20 @@ public class ScheduledPayment {
                             LocalDate dueDate,
                             boolean reminder,
                             PaymentStatus status) {
+        this(user, account, title, counterparty, amount, category, iconKey, dueDate, reminder, status, classifyFlexibility(title, category));
+    }
+
+    public ScheduledPayment(User user,
+                            Account account,
+                            String title,
+                            String counterparty,
+                            BigDecimal amount,
+                            String category,
+                            String iconKey,
+                            LocalDate dueDate,
+                            boolean reminder,
+                            PaymentStatus status,
+                            boolean flexible) {
         this.user = user;
         this.account = account;
         this.title = title;
@@ -89,6 +106,7 @@ public class ScheduledPayment {
         this.dueDate = dueDate;
         this.reminder = reminder;
         this.status = status;
+        this.flexible = flexible;
     }
 
     public Long getId() {
@@ -143,5 +161,27 @@ public class ScheduledPayment {
     public void postponeTo(LocalDate targetDate) {
         this.dueDate = targetDate;
         this.status = PaymentStatus.POSTPONED;
+    }
+
+    public boolean isFlexible() {
+        return flexible;
+    }
+
+    public void setFlexible(boolean flexible) {
+        this.flexible = flexible;
+    }
+
+    public static boolean classifyFlexibility(String title, String category) {
+        String normalized = ((title != null ? title : "") + " " + (category != null ? category : "")).toLowerCase(java.util.Locale.ROOT);
+        return !containsAnyOf(normalized, "аренд", "коммун", "кредит", "ипотек", "налог", "штраф", "страхов", "зарплат");
+    }
+
+    private static boolean containsAnyOf(String value, String... candidates) {
+        for (String candidate : candidates) {
+            if (value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

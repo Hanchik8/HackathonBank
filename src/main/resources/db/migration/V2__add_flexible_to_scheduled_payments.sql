@@ -1,0 +1,1 @@
+ALTER TABLE scheduled_payments ADD COLUMN flexible BOOLEAN NOT NULL DEFAULT TRUE;

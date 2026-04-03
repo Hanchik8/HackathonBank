@@ -243,6 +243,24 @@ class BankApiService {
     return SmartCategory.fromJson(json);
   }
 
+  Future<SmartCategory> createSmartCategoryFromTransaction({
+    required int transactionId,
+    required String name,
+    required double plannedMonthly,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/smart-categories/link-transaction',
+              body: <String, dynamic>{
+                'transactionId': transactionId,
+                'name': name,
+                'plannedMonthly': plannedMonthly,
+              },
+            )
+            as Map<String, dynamic>;
+    return SmartCategory.fromJson(json);
+  }
+
   Future<void> setSmartCategoryFavorite(
     String categoryId,
     bool isFavorite,

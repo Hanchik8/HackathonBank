@@ -60,7 +60,7 @@ class HackathonBankApplicationTests {
     void transactionsEndpointReturnsSeededOperations() throws Exception {
         mockMvc.perform(get("/api/v1/transactions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(46))
+                .andExpect(jsonPath("$.length()").value(48))
                 .andExpect(jsonPath("$[0].status").value("SCHEDULED"));
     }
 
@@ -82,7 +82,7 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.fromAccount.balance").value(45000.00))
                 .andExpect(jsonPath("$.toAccount.balance").value(20000.00));
 
-        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L)).hasSize(48);
+        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L)).hasSize(50);
     }
 
     @Test
@@ -215,7 +215,8 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.message", containsString(shortDateLabel(LocalDate.now().plusDays(8)))))
                 .andExpect(jsonPath("$.message", containsString("7800.00 KGS")))
                 .andExpect(jsonPath("$.message", containsString("Коммунальные")))
-                .andExpect(jsonPath("$.message", containsString("27800.00 KGS")));
+                .andExpect(jsonPath("$.message", containsString("В сумме к")))
+                .andExpect(jsonPath("$.message", containsString("дефицит составит")));
     }
 
     @Test

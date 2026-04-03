@@ -169,7 +169,8 @@ public class ScheduledPaymentService {
                 payment.getAmount(),
                 payment.getDueDate(),
                 payment.getStatus().name(),
-                payment.isReminder()
+                payment.isReminder(),
+                payment.isFlexible()
         );
     }
 

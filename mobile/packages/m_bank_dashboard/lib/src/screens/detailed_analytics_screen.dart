@@ -6,6 +6,7 @@ import 'dart:ui';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../models/ai_dashboard_model.dart';
 import '../models/transaction_model.dart';
 import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
@@ -26,9 +27,14 @@ typedef _ForecastSummary = ({
 });
 
 class DetailedAnalyticsScreen extends StatefulWidget {
-  const DetailedAnalyticsScreen({super.key, required this.transactions});
+  const DetailedAnalyticsScreen({
+    super.key,
+    required this.transactions,
+    this.backendForecastPoints,
+  });
 
   final List<TransactionModel> transactions;
+  final List<ForecastPointModel>? backendForecastPoints;
 
   @override
   State<DetailedAnalyticsScreen> createState() =>
@@ -84,7 +90,9 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     _monthlyBuckets = _buildMonthlyBuckets(_sortedTransactions, _anchorDate);
     _dailyNetSeries = _buildDailyNetSeries(_sortedTransactions, _anchorDate);
     _pieSlices = _buildPieSlices(_sortedTransactions, _anchorDate);
-    _forecast = _buildForecastSummary(_monthlyBuckets, _anchorDate);
+    _forecast = widget.backendForecastPoints != null && widget.backendForecastPoints!.length >= 2
+        ? _buildForecastFromBackend(widget.backendForecastPoints!, _anchorDate)
+        : _buildForecastSummary(_monthlyBuckets, _anchorDate);
   }
 
   @override
@@ -375,6 +383,38 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     }
 
     return slices;
+  }
+
+  _ForecastSummary _buildForecastFromBackend(
+    List<ForecastPointModel> points,
+    DateTime anchorDate,
+  ) {
+    final forecastDays = math.min(30, points.length);
+    final incomeSpots = <FlSpot>[];
+    final expenseSpots = <FlSpot>[];
+    final dates = <DateTime>[];
+    var projectedBalance = 0.0;
+
+    for (var i = 0; i < forecastDays; i++) {
+      final point = points[math.min(i, points.length - 1)];
+      final balance = point.balance;
+      final prevBalance = i > 0 ? points[math.min(i - 1, points.length - 1)].balance : points[0].balance;
+      final dailyDelta = balance - prevBalance;
+      final dailyIncome = dailyDelta > 0 ? dailyDelta : 0.0;
+      final dailyExpense = dailyDelta < 0 ? dailyDelta.abs() : 0.0;
+
+      incomeSpots.add(FlSpot(i.toDouble(), dailyIncome));
+      expenseSpots.add(FlSpot(i.toDouble(), dailyExpense));
+      dates.add(_dateOnly(anchorDate).add(Duration(days: i + 1)));
+      projectedBalance += dailyIncome - dailyExpense;
+    }
+
+    return (
+      incomeSpots: incomeSpots,
+      expenseSpots: expenseSpots,
+      dates: dates,
+      projectedBalance: projectedBalance,
+    );
   }
 
   _ForecastSummary _buildForecastSummary(

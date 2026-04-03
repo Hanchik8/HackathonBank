@@ -11,3 +11,4 @@ export 'src/models/subscription_model.dart';
 export 'src/models/transaction_model.dart';
 export 'src/screens/ai_dashboard_screen.dart';
 export 'src/screens/detailed_analytics_screen.dart';
+export 'src/widgets/smart_category_form_sheet.dart';

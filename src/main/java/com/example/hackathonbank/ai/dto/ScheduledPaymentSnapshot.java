@@ -14,6 +14,7 @@ public record ScheduledPaymentSnapshot(
         BigDecimal amount,
         LocalDate dueDate,
         String status,
-        boolean isReminder
+        boolean isReminder,
+        boolean flexible
 ) {
 }
