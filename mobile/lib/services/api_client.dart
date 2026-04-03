@@ -23,17 +23,23 @@ class ApiClient {
     return 'http://localhost:8080/api/v1';
   }
 
+  static const Duration _requestTimeout = Duration(seconds: 15);
+
   Future<dynamic> getJson(String path) async {
-    final response = await _httpClient.get(Uri.parse('$baseUrl$path'));
+    final response = await _httpClient
+        .get(Uri.parse('$baseUrl$path'))
+        .timeout(_requestTimeout);
     return _decodeResponse(response);
   }
 
   Future<dynamic> postJson(String path, {Object? body}) async {
-    final response = await _httpClient.post(
-      Uri.parse('$baseUrl$path'),
-      headers: <String, String>{'Content-Type': 'application/json'},
-      body: body == null ? null : jsonEncode(body),
-    );
+    final response = await _httpClient
+        .post(
+          Uri.parse('$baseUrl$path'),
+          headers: <String, String>{'Content-Type': 'application/json'},
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(_requestTimeout);
     return _decodeResponse(response);
   }
 

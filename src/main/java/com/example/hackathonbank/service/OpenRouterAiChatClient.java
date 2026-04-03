@@ -28,17 +28,23 @@ public class OpenRouterAiChatClient implements AiChatClient {
     private final String apiUrl;
     private final String apiKey;
     private final String model;
+    private final String httpReferer;
+    private final String appTitle;
 
     public OpenRouterAiChatClient(AiCallExecutor aiCallExecutor,
                                   ObjectMapper objectMapper,
                                   @Value("${ai.api-url:https://openrouter.ai/api/v1/chat/completions}") String apiUrl,
-                                  @Value("${ai.api-key:demo-key}") String apiKey,
-                                  @Value("${ai.model:google/gemini-2.0-flash-001}") String model) {
+                                  @Value("${ai.api-key:}") String apiKey,
+                                  @Value("${ai.model:google/gemini-2.0-flash-001}") String model,
+                                  @Value("${ai.http-referer:http://localhost:8080}") String httpReferer,
+                                  @Value("${ai.app-title:HackathonBank}") String appTitle) {
         this.aiCallExecutor = aiCallExecutor;
         this.objectMapper = objectMapper;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.model = model;
+        this.httpReferer = httpReferer;
+        this.appTitle = appTitle;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
@@ -65,8 +71,8 @@ public class OpenRouterAiChatClient implements AiChatClient {
         HttpRequest request = HttpRequest.newBuilder(URI.create(apiUrl))
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
-                .header("HTTP-Referer", "http://localhost:8080")
-                .header("X-Title", "HackathonBank")
+                .header("HTTP-Referer", httpReferer)
+                .header("X-Title", appTitle)
                 .POST(HttpRequest.BodyPublishers.ofString(buildPayload(messages), StandardCharsets.UTF_8))
                 .build();
 

@@ -82,13 +82,14 @@ class _AppShellState extends State<AppShell> {
           _preferredSmartCategoryId = null;
         }
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
         _favoriteSmartCategories = const <SmartCategory>[];
       });
+      debugPrint('Failed to refresh favorite categories: $error');
     }
   }
 
@@ -111,11 +112,11 @@ class _AppShellState extends State<AppShell> {
         dueTodayPayments,
         resetDismissal: resetDismissal,
       );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
-
+      debugPrint('Failed to refresh due payment banner: $error');
       _setDuePaymentBannerState(noPayments, resetDismissal: resetDismissal);
     }
   }
@@ -742,8 +743,4 @@ bool _isSameDay(DateTime left, DateTime right) {
   return left.year == right.year &&
       left.month == right.month &&
       left.day == right.day;
-}
-
-extension<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

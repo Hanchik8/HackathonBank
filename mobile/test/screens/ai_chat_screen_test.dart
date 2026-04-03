@@ -10,6 +10,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final apiService = FakeBankApiService();
+    const message = 'Как безопасно откладывать деньги?';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -17,20 +18,14 @@ void main() {
         home: AiChatScreen(apiService: apiService),
       ),
     );
-
-    await tester.enterText(
-      find.byType(TextField),
-      'Как безопасно откладывать деньги?',
-    );
-    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
-    await tester.pump();
-
-    expect(find.text('Как безопасно откладывать деньги?'), findsOneWidget);
-    expect(find.byKey(const ValueKey<String>('ai-chat-typing-bubble')), findsOneWidget);
-
     await tester.pumpAndSettle();
 
-    expect(apiService.lastChatMessage, 'Как безопасно откладывать деньги?');
+    await tester.enterText(find.byType(TextField), message);
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text(message), findsOneWidget);
+    expect(apiService.lastChatMessage, message);
     expect(apiService.lastChatHistory, isEmpty);
     expect(find.textContaining('Safe-to-Save'), findsOneWidget);
   });

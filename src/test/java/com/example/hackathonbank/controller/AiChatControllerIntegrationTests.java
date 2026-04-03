@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,33 +41,32 @@ class AiChatControllerIntegrationTests {
 
     @Test
     void chatEndpointPrependsFreshFinancialContextAndReturnsAssistantReply() throws Exception {
-        when(aiChatClient.complete(anyList())).thenReturn("Сейчас безопаснее держать ликвидность под аренду.");
+        when(aiChatClient.complete(anyList())).thenReturn("РЎРµР№С‡Р°СЃ Р±РµР·РѕРїР°СЃРЅРµРµ РґРµСЂР¶Р°С‚СЊ Р»РёРєРІРёРґРЅРѕСЃС‚СЊ РїРѕРґ Р°СЂРµРЅРґСѓ.");
 
         mockMvc.perform(post("/api/v1/ai/chat")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(new AiChatRequest(
                                 List.of(
-                                        new ChatMessageDto("user", "Покажи краткую сводку."),
-                                        new ChatMessageDto("assistant", "У вас спокойный остаток.")
+                                        new ChatMessageDto("user", "РџРѕРєР°Р¶Рё РєСЂР°С‚РєСѓСЋ СЃРІРѕРґРєСѓ."),
+                                        new ChatMessageDto("assistant", "РЈ РІР°СЃ СЃРїРѕРєРѕР№РЅС‹Р№ РѕСЃС‚Р°С‚РѕРє.")
                                 ),
-                                "Что делать с деньгами до зарплаты?"
+                                "Р§С‚Рѕ РґРµР»Р°С‚СЊ СЃ РґРµРЅСЊРіР°РјРё РґРѕ Р·Р°СЂРїР»Р°С‚С‹?"
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message.role").value("assistant"))
-                .andExpect(jsonPath("$.message.content").value("Сейчас безопаснее держать ликвидность под аренду."));
+                .andExpect(jsonPath("$.message.content").value("РЎРµР№С‡Р°СЃ Р±РµР·РѕРїР°СЃРЅРµРµ РґРµСЂР¶Р°С‚СЊ Р»РёРєРІРёРґРЅРѕСЃС‚СЊ РїРѕРґ Р°СЂРµРЅРґСѓ."));
 
         ArgumentCaptor<List<ChatMessageDto>> captor = ArgumentCaptor.forClass(List.class);
         verify(aiChatClient).complete(captor.capture());
 
         List<ChatMessageDto> messages = captor.getValue();
-        assertThat(messages).hasSize(4);
+        assertThat(messages).hasSize(2);
         assertThat(messages.get(0).role()).isEqualTo("system");
         assertThat(messages.get(0).content()).contains("Ты персональный финансовый советник");
         assertThat(messages.get(0).content()).contains("\"balances\"");
         assertThat(messages.get(0).content()).contains("\"transactionsLast3Months\"");
         assertThat(messages.get(1).role()).isEqualTo("user");
-        assertThat(messages.get(2).role()).isEqualTo("assistant");
-        assertThat(messages.get(3).content()).isEqualTo("Что делать с деньгами до зарплаты?");
+        assertThat(messages.get(1).content()).isEqualTo("Р§С‚Рѕ РґРµР»Р°С‚СЊ СЃ РґРµРЅСЊРіР°РјРё РґРѕ Р·Р°СЂРїР»Р°С‚С‹?");
     }
 
     @Test
@@ -77,5 +77,25 @@ class AiChatControllerIntegrationTests {
                                 {"history":[],"newMessage":"   "}
                                 """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void historyEndpointReturnsPersistedConversation() throws Exception {
+        when(aiChatClient.complete(anyList())).thenReturn("Р’Р°Р¶РЅРѕ РґРµСЂР¶Р°С‚СЊ СЂРµР·РµСЂРІ РїРѕРґ Р±Р»РёР¶Р°Р№С€РёР№ РїР»Р°С‚РµР¶.");
+
+        mockMvc.perform(post("/api/v1/ai/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AiChatRequest(
+                                List.of(),
+                                "Р§С‚Рѕ Сѓ РјРµРЅСЏ СЃ Р»РёРєРІРёРґРЅРѕСЃС‚СЊСЋ РґРѕ Р·Р°СЂРїР»Р°С‚С‹?"
+                        ))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/ai/chat/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].role").value("user"))
+                .andExpect(jsonPath("$[0].content").value("Р§С‚Рѕ Сѓ РјРµРЅСЏ СЃ Р»РёРєРІРёРґРЅРѕСЃС‚СЊСЋ РґРѕ Р·Р°СЂРїР»Р°С‚С‹?"))
+                .andExpect(jsonPath("$[1].role").value("assistant"))
+                .andExpect(jsonPath("$[1].content").value("Р’Р°Р¶РЅРѕ РґРµСЂР¶Р°С‚СЊ СЂРµР·РµСЂРІ РїРѕРґ Р±Р»РёР¶Р°Р№С€РёР№ РїР»Р°С‚РµР¶."));
     }
 }

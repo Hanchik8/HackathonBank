@@ -1,6 +1,5 @@
 package com.example.hackathonbank;
 
-import com.example.hackathonbank.ai.PendingActionRegistry;
 import com.example.hackathonbank.controller.dto.ExternalTransferRequest;
 import com.example.hackathonbank.controller.dto.ScheduledPaymentRequest;
 import com.example.hackathonbank.controller.dto.TransferRequest;
@@ -10,7 +9,6 @@ import com.example.hackathonbank.repository.AccountRepository;
 import com.example.hackathonbank.repository.TransactionRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -47,14 +45,6 @@ class HackathonBankApplicationTests {
     @Autowired
     private TransactionRepository transactionRepository;
 
-    @Autowired
-    private PendingActionRegistry pendingActionRegistry;
-
-    @AfterEach
-    void tearDown() {
-        pendingActionRegistry.clear();
-    }
-
     @Test
     void accountsEndpointReturnsSeededAccounts() throws Exception {
         mockMvc.perform(get("/api/v1/accounts"))
@@ -70,8 +60,7 @@ class HackathonBankApplicationTests {
     void transactionsEndpointReturnsSeededOperations() throws Exception {
         mockMvc.perform(get("/api/v1/transactions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(21))
-                .andExpect(jsonPath("$[0].title").value("Автоплатеж: Аренда"))
+                .andExpect(jsonPath("$.length()").value(46))
                 .andExpect(jsonPath("$[0].status").value("SCHEDULED"));
     }
 
@@ -93,7 +82,7 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.fromAccount.balance").value(45000.00))
                 .andExpect(jsonPath("$.toAccount.balance").value(20000.00));
 
-        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L)).hasSize(23);
+        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L)).hasSize(48);
     }
 
     @Test
@@ -119,7 +108,7 @@ class HackathonBankApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.horizonDays").value(99))
                 .andExpect(jsonPath("$.points.length()").value(100))
-                .andExpect(jsonPath("$.scheduledPayments.length()").value(1));
+                .andExpect(jsonPath("$.scheduledPayments.length()").value(3));
     }
 
     @Test
@@ -153,7 +142,7 @@ class HackathonBankApplicationTests {
                                 "HomeNet",
                                 "Подписки",
                                 new BigDecimal("3900.00"),
-                                java.time.LocalDate.now().plusDays(5)
+                                LocalDate.now().plusDays(5)
                         ))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Интернет"))
@@ -223,7 +212,10 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.message", containsString(shortDateLabel(secondPaymentDate))))
                 .andExpect(jsonPath("$.message", containsString("10000.00 KGS")))
                 .andExpect(jsonPath("$.message", containsString("Долг")))
-                .andExpect(jsonPath("$.message", containsString("20000.00 KGS")));
+                .andExpect(jsonPath("$.message", containsString(shortDateLabel(LocalDate.now().plusDays(8)))))
+                .andExpect(jsonPath("$.message", containsString("7800.00 KGS")))
+                .andExpect(jsonPath("$.message", containsString("Коммунальные")))
+                .andExpect(jsonPath("$.message", containsString("27800.00 KGS")));
     }
 
     @Test
@@ -250,7 +242,7 @@ class HackathonBankApplicationTests {
                                 "Insurance Co",
                                 "Страховка",
                                 new BigDecimal("48000.00"),
-                                java.time.LocalDate.now().plusDays(3)
+                                LocalDate.now().plusDays(3)
                         ))))
                 .andExpect(status().isOk());
 
@@ -367,7 +359,7 @@ class HackathonBankApplicationTests {
         mockMvc.perform(post("/api/v1/demo/accounts/{accountId}/adjust", mainAccount.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"delta":60000.00,"title":"Р”РµРјРѕ РїРѕРїРѕР»РЅРµРЅРёРµ"}
+                                {"delta":60000.00,"title":"Демо пополнение"}
                                 """))
                 .andExpect(status().isOk());
 

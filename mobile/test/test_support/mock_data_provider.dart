@@ -1,9 +1,9 @@
-import '../models/account_model.dart';
-import '../models/ai_analysis_model.dart';
-import '../models/ai_dashboard_model.dart';
-import '../models/smart_category_model.dart';
-import '../models/transaction_model.dart';
-import 'api_client.dart';
+import 'package:hackathon_bank_mobile/models/account_model.dart';
+import 'package:hackathon_bank_mobile/models/ai_analysis_model.dart';
+import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
+import 'package:hackathon_bank_mobile/models/smart_category_model.dart';
+import 'package:hackathon_bank_mobile/models/transaction_model.dart';
+import 'package:hackathon_bank_mobile/services/api_client.dart';
 
 class MockDataProvider {
   MockDataProvider._();

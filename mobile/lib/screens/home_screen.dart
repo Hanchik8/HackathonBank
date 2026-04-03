@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/account_model.dart';
 import '../models/transaction_model.dart';
 import '../services/bank_api_service.dart';
+import '../services/mock_notifications.dart';
 import '../screens/my_bank_screen.dart';
+import '../screens/notifications_screen.dart';
 import '../theme/app_theme.dart';
 import '../theme/som_formatter.dart';
 import '../widgets/bank_card_preview.dart';
@@ -24,6 +26,21 @@ class HomeScreen extends StatefulWidget {
   final int refreshSignal;
   final VoidCallback onDataChanged;
 
+  static const List<String> _monthNames = <String>[
+    'январь',
+    'февраль',
+    'март',
+    'апрель',
+    'май',
+    'июнь',
+    'июль',
+    'август',
+    'сентябрь',
+    'октябрь',
+    'ноябрь',
+    'декабрь',
+  ];
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -31,6 +48,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   List<AccountModel>? _accounts;
   List<TransactionModel>? _transactions;
+  DateTime _effectiveDate = DateTime.now();
   String? _errorMessage;
   bool _isLoading = true;
 
@@ -58,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
         widget.apiService.fetchAccounts(),
         widget.apiService.fetchTransactions(),
+        widget.apiService.getEffectiveDate(),
       ]);
 
       if (!mounted) {
@@ -67,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _accounts = results[0] as List<AccountModel>;
         _transactions = results[1] as List<TransactionModel>;
+        _effectiveDate = results[2] as DateTime;
         _isLoading = false;
       });
     } catch (error) {
@@ -92,6 +112,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _openNotificationsScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            NotificationsScreen(notifications: getMockNotifications()),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -106,8 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final transactions = _transactions!;
     final mainAccount = accounts.firstWhere(
       (account) => account.type == 'MAIN',
+      orElse: () => accounts.first,
     );
-    final currentMonth = DateTime.now().month;
+    final unreadNotifications = getMockNotifications()
+        .where((notification) => !notification.isRead)
+        .length;
+    final currentMonth = _effectiveDate.month;
     final monthTransactions = transactions
         .where((transaction) => transaction.occurredAt.month == currentMonth)
         .toList();
@@ -136,7 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
         children: <Widget>[
-          const _HeaderRow(),
+          _HeaderRow(
+            unreadNotifications: unreadNotifications,
+            onNotificationsTap: _openNotificationsScreen,
+          ),
           const SizedBox(height: 20),
           const _TopTabs(),
           const SizedBox(height: 18),
@@ -146,7 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
             children: <Widget>[
               Expanded(
                 child: _MonthSummaryCard(
-                  title: 'За март',
+                  title:
+                      'За ${HomeScreen._monthNames[_effectiveDate.month - 1]}',
                   value: SomFormatter.amount(monthlyExpense, fractionDigits: 0),
                   segments: <SpendSegment>[
                     SpendSegment(color: AppTheme.blue, value: qrExpense),
@@ -203,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
           const SizedBox(height: 12),
           Text(
-            'Поступления за март: ${SomFormatter.amount(monthlyIncome)}',
+            'Поступления за ${HomeScreen._monthNames[_effectiveDate.month - 1]}: ${SomFormatter.amount(monthlyIncome)}',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
@@ -215,7 +252,13 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _HeaderRow extends StatelessWidget {
-  const _HeaderRow();
+  const _HeaderRow({
+    required this.unreadNotifications,
+    required this.onNotificationsTap,
+  });
+
+  final int unreadNotifications;
+  final VoidCallback onNotificationsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -257,45 +300,65 @@ class _HeaderRow extends StatelessWidget {
         ),
         const _HeaderIcon(icon: Icons.chat_bubble_rounded),
         const SizedBox(width: 12),
-        const _HeaderIcon(icon: Icons.notifications_rounded, badge: '14'),
+        _HeaderIcon(
+          icon: Icons.notifications_outlined,
+          badge: unreadNotifications > 0
+              ? unreadNotifications.toString()
+              : null,
+          onTap: onNotificationsTap,
+        ),
       ],
     );
   }
 }
 
 class _HeaderIcon extends StatelessWidget {
-  const _HeaderIcon({required this.icon, this.badge});
+  const _HeaderIcon({required this.icon, this.badge, this.onTap});
 
   final IconData icon;
   final String? badge;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        Icon(icon, color: AppTheme.accent, size: 28),
-        if (badge != null)
-          Positioned(
-            top: -3,
-            right: -4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8475D),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                badge!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(icon, color: AppTheme.accent, size: 28),
+            ),
+            if (badge != null)
+              Positioned(
+                top: -3,
+                right: -4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8475D),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    badge!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -311,24 +374,24 @@ class _TopTabs extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-        const _TabLabel(label: 'MMarket', active: false),
-        const SizedBox(width: 18),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8475D),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: const Text(
-            'НОВОЕ',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+            const _TabLabel(label: 'MMarket', active: false),
+            const SizedBox(width: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8475D),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: const Text(
+                'НОВОЕ',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 26),
+            const SizedBox(width: 26),
             const _TabLabel(label: 'MBank', active: true),
           ],
         ),
@@ -730,51 +793,51 @@ class _MyBankCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(28),
           ),
           child: Row(
-        children: <Widget>[
-          Container(
-            width: 56,
-            height: 56,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: <Color>[Color(0xFF0FCD7C), Color(0xFF18B1D8)],
+            children: <Widget>[
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: <Color>[Color(0xFF0FCD7C), Color(0xFF18B1D8)],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.account_balance_rounded,
+                  color: Colors.white,
+                ),
               ),
-            ),
-            child: const Icon(
-              Icons.account_balance_rounded,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: <Widget>[
-                    Text(
-                      'Мой банк',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontWeight: FontWeight.w800),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: <Widget>[
+                        Text(
+                          'Мой банк',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppTheme.accent,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppTheme.accent,
+                    const SizedBox(height: 2),
+                    Text(
+                      'Счета и карты',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: AppTheme.secondaryText,
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Счета и карты',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTheme.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+              ),
+            ],
           ),
         ),
       ),

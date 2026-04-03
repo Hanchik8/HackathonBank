@@ -62,7 +62,7 @@ public class AiChatService {
     }
 
     private List<ChatMessageDto> loadPersistedHistory(Long userId) {
-        List<ChatMessageDto> history = chatMessageRepository.findTop100ByUserIdOrderByCreatedAtAsc(userId).stream()
+        List<ChatMessageDto> history = chatMessageRepository.findByUserIdOrderByCreatedAtAsc(userId).stream()
                 .filter(message -> message.getRole() != null)
                 .filter(message -> StringUtils.hasText(message.getContent()))
                 .map(message -> new ChatMessageDto(

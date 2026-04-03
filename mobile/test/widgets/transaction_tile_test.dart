@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hackathon_bank_mobile/theme/app_date_formatter.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
 import 'package:hackathon_bank_mobile/widgets/transaction_tile.dart';
 
 import '../test_support/fake_bank_api_service.dart';
 
 void main() {
-  testWidgets('renders account label and formatted date', (
+  testWidgets('renders transaction title and formatted date', (
     WidgetTester tester,
   ) async {
     final transaction = sampleTransactions().first;
@@ -18,8 +19,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Продукты'), findsOneWidget);
-    expect(find.textContaining('Основной счет'), findsOneWidget);
-    expect(find.textContaining('12 мар., 09:05'), findsOneWidget);
+    expect(find.text(transaction.title), findsOneWidget);
+    expect(
+      find.textContaining(AppDateFormatter.shortDateTime(transaction.occurredAt)),
+      findsOneWidget,
+    );
   });
 }
