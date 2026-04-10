@@ -214,6 +214,7 @@ public class AiAnalysisService {
         LocalDate currentDate = userSettingsService.currentDate();
         LocalDate horizonDate = currentDate.plusDays(Math.max(0, horizonDays));
         return scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> payment.getAccount().getType() == AccountType.MAIN)
                 .filter(payment -> !payment.getDueDate().isBefore(currentDate))
                 .filter(payment -> !payment.getDueDate().isAfter(horizonDate))
                 .sorted(Comparator.comparing(ScheduledPayment::getDueDate)
@@ -376,8 +377,13 @@ public class AiAnalysisService {
     private LocalDate inferRecommendedPostponeDate(LocalDate afterDate) {
         Long userId = userContextService.getCurrentUser().getId();
         IncomeCalendarService.IncomeCalendar calendar = incomeCalendarService.buildCalendar(userId, afterDate);
-        if (calendar.confidencePercent() >= 50 && calendar.nextExpectedDate().isAfter(afterDate)) {
-            return calendar.nextExpectedDate();
+        if (calendar.confidencePercent() >= 50) {
+            LocalDate candidate = calendar.rangeEnd().isAfter(afterDate)
+                    ? calendar.rangeEnd()
+                    : calendar.nextExpectedDate();
+            if (candidate.isAfter(afterDate)) {
+                return candidate;
+            }
         }
         return afterDate.plusDays(7);
     }

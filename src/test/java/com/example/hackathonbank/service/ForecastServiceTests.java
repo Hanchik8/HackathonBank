@@ -110,6 +110,15 @@ class ForecastServiceTests {
         when(scheduledPaymentService.getPendingPayments()).thenReturn(List.of(rent));
         when(userSettingsService.currentDate()).thenReturn(currentDate);
         when(incomeCalendarService.buildCalendar(eq(99L), eq(currentDate))).thenReturn(incomeCalendar);
+        when(incomeCalendarService.projectedIncomeEvents(eq(incomeCalendar), eq(currentDate.plusDays(1)), eq(currentDate.plusDays(42)), eq(50)))
+                .thenReturn(List.of(new IncomeCalendarService.ProjectedIncomeEvent(
+                        IncomeType.SALARY,
+                        currentDate.plusDays(1),
+                        currentDate.plusDays(1),
+                        currentDate.plusDays(3),
+                        new BigDecimal("5000.00"),
+                        85
+                )));
         when(spendProfileService.buildProfile(eq(99L), eq(currentDate))).thenReturn(spendProfile);
 
         AiDashboardResponse dashboard = forecastService.buildDashboard(42);
@@ -157,6 +166,15 @@ class ForecastServiceTests {
         when(scheduledPaymentService.getPendingPayments()).thenReturn(List.of());
         when(userSettingsService.currentDate()).thenReturn(currentDate);
         when(incomeCalendarService.buildCalendar(eq(99L), eq(currentDate))).thenReturn(incomeCalendar);
+        when(incomeCalendarService.projectedIncomeEvents(eq(incomeCalendar), eq(currentDate.plusDays(1)), eq(currentDate.plusDays(20)), eq(50)))
+                .thenReturn(List.of(new IncomeCalendarService.ProjectedIncomeEvent(
+                        IncomeType.SALARY,
+                        LocalDate.of(2026, 2, 28),
+                        LocalDate.of(2026, 2, 27),
+                        LocalDate.of(2026, 3, 1),
+                        new BigDecimal("80000.00"),
+                        99
+                )));
         when(spendProfileService.buildProfile(eq(99L), eq(currentDate))).thenReturn(spendProfile);
 
         AiDashboardResponse dashboard = forecastService.buildDashboard(20);

@@ -20,10 +20,11 @@ typedef _PieSlice = ({
   Color color,
 });
 typedef _ForecastSummary = ({
-  List<FlSpot> incomeSpots,
-  List<FlSpot> expenseSpots,
+  List<FlSpot> primarySpots,
+  List<FlSpot> secondarySpots,
   List<DateTime> dates,
   double projectedBalance,
+  bool isBackendBalanceMode,
 });
 
 class DetailedAnalyticsScreen extends StatefulWidget {
@@ -43,7 +44,7 @@ class DetailedAnalyticsScreen extends StatefulWidget {
 
 class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     with SingleTickerProviderStateMixin {
-  static const Duration _chartAnimationDuration = Duration(milliseconds: 600);
+  static const _chartAnimationDuration = Duration(milliseconds: 600);
 
   late final AnimationController _animationController;
   late final CurvedAnimation _chartAnimation;
@@ -80,22 +81,6 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     }
   }
 
-  void _recomputeAnalytics() {
-    _sortedTransactions = widget.transactions
-        .where((transaction) => transaction.status == 'COMPLETED')
-        .toList(growable: false)
-      ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
-    _anchorDate = _sortedTransactions.isEmpty
-        ? DateTime.now()
-        : _sortedTransactions.last.occurredAt;
-    _monthlyBuckets = _buildMonthlyBuckets(_sortedTransactions, _anchorDate);
-    _dailyNetSeries = _buildDailyNetSeries(_sortedTransactions, _anchorDate);
-    _pieSlices = _buildPieSlices(_sortedTransactions, _anchorDate);
-    _forecast = widget.backendForecastPoints != null && widget.backendForecastPoints!.length >= 2
-        ? _buildForecastFromBackend(widget.backendForecastPoints!, _anchorDate)
-        : _buildForecastSummary(_monthlyBuckets, _anchorDate);
-  }
-
   @override
   void dispose() {
     _chartAnimation.dispose();
@@ -103,15 +88,29 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     super.dispose();
   }
 
+  void _recomputeAnalytics() {
+    _sortedTransactions =
+        widget.transactions
+            .where((transaction) => transaction.status == 'COMPLETED')
+            .toList(growable: false)
+          ..sort((left, right) => left.occurredAt.compareTo(right.occurredAt));
+    _anchorDate = _sortedTransactions.isEmpty
+        ? DateTime.now()
+        : _sortedTransactions.last.occurredAt;
+    _monthlyBuckets = _buildMonthlyBuckets();
+    _dailyNetSeries = _buildDailyNetSeries();
+    _pieSlices = _buildPieSlices();
+    final backendPoints = widget.backendForecastPoints;
+    _forecast = backendPoints != null && backendPoints.isNotEmpty
+        ? _buildBackendForecast(backendPoints)
+        : _buildFallbackForecast();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final monthlyBuckets = _monthlyBuckets;
-    final dailyNetSeries = _dailyNetSeries;
-    final pieSlices = _pieSlices;
-    final forecast = _forecast;
     final touchedSlice =
-        _touchedPieIndex >= 0 && _touchedPieIndex < pieSlices.length
-        ? pieSlices[_touchedPieIndex]
+        _touchedPieIndex >= 0 && _touchedPieIndex < _pieSlices.length
+        ? _pieSlices[_touchedPieIndex]
         : null;
 
     return Scaffold(
@@ -146,12 +145,8 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
               ),
             ),
             const SizedBox(height: 22),
-            const _SectionHeader(
-              title: 'История за 3 месяца',
-              subtitle: 'Доходы, расходы и поведение денежного потока.',
-            ),
-            const SizedBox(height: 14),
-            _GlassChartCard(
+            _card(
+              context,
               title: 'Доходы и расходы по месяцам',
               subtitle: 'Сравнение последних трёх месяцев.',
               footer: const _LegendRow(
@@ -160,91 +155,91 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
                   (color: Color(0xFFE57373), label: 'Расходы'),
                 ],
               ),
-              child: _AnimatedChart(
-                animation: _chartAnimation,
-                child: _ResponsiveChart(
-                  builder: (height) => BarChart(
-                    _buildMonthlyBarChartData(context, monthlyBuckets),
-                    swapAnimationDuration: _chartAnimationDuration,
-                    swapAnimationCurve: Curves.easeInOut,
-                  ),
-                ),
+              child: _animatedChart(
+                BarChart(_buildMonthlyBarChartData(context)),
               ),
             ),
             const SizedBox(height: 18),
-            _GlassChartCard(
+            _card(
+              context,
               title: 'Тренд чистого денежного потока',
               subtitle: '90 дней истории с нулевой линией.',
-              child: _AnimatedChart(
-                animation: _chartAnimation,
-                child: _ResponsiveChart(
-                  builder: (height) => LineChart(
-                    _buildNetTrendChartData(context, dailyNetSeries),
-                    duration: _chartAnimationDuration,
-                    curve: Curves.easeInOut,
-                  ),
+              child: _animatedChart(
+                LineChart(
+                  _buildNetTrendChartData(context),
+                  duration: _chartAnimationDuration,
+                  curve: Curves.easeInOut,
                 ),
               ),
             ),
             const SizedBox(height: 18),
-            _GlassChartCard(
+            _card(
+              context,
               title: 'Расходы по категориям',
               subtitle: touchedSlice == null
                   ? 'Нажмите на сектор, чтобы увидеть категорию и долю.'
                   : '${touchedSlice.category} · ${touchedSlice.percentage.toStringAsFixed(1)}%',
-              footer: _PieLegend(slices: pieSlices),
-              child: _AnimatedChart(
-                animation: _chartAnimation,
-                child: _ResponsiveChart(
-                  builder: (height) => PieChart(
-                    _buildPieChartData(context, pieSlices),
-                    swapAnimationDuration: _chartAnimationDuration,
-                    swapAnimationCurve: Curves.easeInOut,
-                  ),
+              footer: _PieLegend(slices: _pieSlices),
+              child: _animatedChart(
+                PieChart(
+                  _buildPieChartData(context),
+                  swapAnimationDuration: _chartAnimationDuration,
+                  swapAnimationCurve: Curves.easeInOut,
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-            _SectionHeader(
-              title: 'Прогноз на 30 дней',
-              subtitle: widget.backendForecastPoints != null
-                  ? 'Событийная модель на основе данных сервера.'
-                  : 'Линейная регрессия по доходам и расходам последних 3 месяцев.',
-            ),
-            const SizedBox(height: 14),
-            _GlassChartCard(
-              title: 'Экстраполяция доходов и расходов',
-              subtitle:
-                  'Пунктирные линии показывают прогноз на ближайшие 30 дней.',
-              footer: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const _LegendRow(
-                    items: <({Color color, String label})>[
-                      (color: Color(0xFF4CAF50), label: 'Прогноз доходов'),
-                      (color: Color(0xFFE57373), label: 'Прогноз расходов'),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Прогнозируемый остаток: ${_signedAmount(forecast.projectedBalance)}',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: forecast.projectedBalance >= 0
-                          ? AppTheme.accent
-                          : const Color(0xFFE57373),
+            const SizedBox(height: 18),
+            _card(
+              context,
+              title: _forecast.isBackendBalanceMode
+                  ? 'Прогноз баланса'
+                  : 'Экстраполяция доходов и расходов',
+              subtitle: _forecast.isBackendBalanceMode
+                  ? 'Серверный прогноз баланса на основе доходных и платёжных событий.'
+                  : 'Клиентский fallback-прогноз по данным последних 3 месяцев.',
+              footer: _forecast.isBackendBalanceMode
+                  ? Text(
+                      'Ожидаемый баланс в конце окна: ${SomFormatter.amount(_forecast.projectedBalance.abs())}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: _forecast.projectedBalance >= 0
+                            ? AppTheme.accent
+                            : const Color(0xFFE57373),
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const _LegendRow(
+                          items: <({Color color, String label})>[
+                            (
+                              color: Color(0xFF4CAF50),
+                              label: 'Прогноз доходов',
+                            ),
+                            (
+                              color: Color(0xFFE57373),
+                              label: 'Прогноз расходов',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Прогнозируемый остаток: ${_signedAmount(_forecast.projectedBalance)}',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: _forecast.projectedBalance >= 0
+                                    ? AppTheme.accent
+                                    : const Color(0xFFE57373),
+                              ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              child: _AnimatedChart(
-                animation: _chartAnimation,
-                child: _ResponsiveChart(
-                  builder: (height) => LineChart(
-                    _buildForecastChartData(context, forecast),
-                    duration: _chartAnimationDuration,
-                    curve: Curves.easeInOut,
-                  ),
+              child: _animatedChart(
+                LineChart(
+                  _buildForecastChartData(context),
+                  duration: _chartAnimationDuration,
+                  curve: Curves.easeInOut,
                 ),
               ),
             ),
@@ -254,45 +249,99 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     );
   }
 
-  List<_MonthlyBucket> _buildMonthlyBuckets(
-    List<TransactionModel> transactions,
-    DateTime anchorDate,
-  ) {
-    final anchorMonth = DateTime(anchorDate.year, anchorDate.month, 1);
-    return List<_MonthlyBucket>.generate(3, (index) {
+  Widget _card(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required Widget child,
+    Widget? footer,
+  }) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppTheme.surface.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.secondaryText,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              child,
+              if (footer != null) ...<Widget>[
+                const SizedBox(height: 18),
+                footer,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _animatedChart(Widget chart) {
+    return FadeTransition(
+      opacity: _chartAnimation,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final targetHeight = (constraints.maxWidth * 0.65).clamp(
+            200.0,
+            320.0,
+          );
+          return SizedBox(height: targetHeight, child: chart);
+        },
+      ),
+    );
+  }
+
+  List<_MonthlyBucket> _buildMonthlyBuckets() => List<_MonthlyBucket>.generate(
+    3,
+    (index) {
+      final anchorMonth = DateTime(_anchorDate.year, _anchorDate.month, 1);
       final monthStart = DateTime(
         anchorMonth.year,
         anchorMonth.month - (2 - index),
         1,
       );
       final nextMonthStart = DateTime(monthStart.year, monthStart.month + 1, 1);
-      final monthTransactions = transactions.where((transaction) {
+      final monthTransactions = _sortedTransactions.where((transaction) {
         final occurredAt = transaction.occurredAt;
         return !occurredAt.isBefore(monthStart) &&
             occurredAt.isBefore(nextMonthStart);
       });
       final income = monthTransactions
           .where((transaction) => transaction.amount > 0)
-          .fold<double>(0, (sum, transaction) => sum + transaction.amount);
+          .fold<double>(0, (sum, t) => sum + t.amount);
       final expense = monthTransactions
           .where((transaction) => transaction.amount < 0)
-          .fold<double>(
-            0,
-            (sum, transaction) => sum + transaction.amount.abs(),
-          );
+          .fold<double>(0, (sum, t) => sum + t.amount.abs());
       return (month: monthStart, income: income, expense: expense);
-    });
-  }
+    },
+  );
 
-  List<_DailyNetPoint> _buildDailyNetSeries(
-    List<TransactionModel> transactions,
-    DateTime anchorDate,
-  ) {
-    final anchorDay = _dateOnly(anchorDate);
+  List<_DailyNetPoint> _buildDailyNetSeries() {
+    final anchorDay = _dateOnly(_anchorDate);
     final startDay = anchorDay.subtract(const Duration(days: 89));
     final amountsByDay = <DateTime, double>{};
-
-    for (final transaction in transactions) {
+    for (final transaction in _sortedTransactions) {
       final day = _dateOnly(transaction.occurredAt);
       if (day.isBefore(startDay) || day.isAfter(anchorDay)) {
         continue;
@@ -303,22 +352,17 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
         ifAbsent: () => transaction.amount,
       );
     }
-
     return List<_DailyNetPoint>.generate(90, (index) {
       final day = startDay.add(Duration(days: index));
       return (date: day, value: amountsByDay[day] ?? 0);
     });
   }
 
-  List<_PieSlice> _buildPieSlices(
-    List<TransactionModel> transactions,
-    DateTime anchorDate,
-  ) {
-    final monthStart = DateTime(anchorDate.year, anchorDate.month, 1);
-    final nextMonthStart = DateTime(anchorDate.year, anchorDate.month + 1, 1);
+  List<_PieSlice> _buildPieSlices() {
+    final monthStart = DateTime(_anchorDate.year, _anchorDate.month, 1);
+    final nextMonthStart = DateTime(_anchorDate.year, _anchorDate.month + 1, 1);
     final expensesByCategory = <String, double>{};
-
-    for (final transaction in transactions) {
+    for (final transaction in _sortedTransactions) {
       if (transaction.amount >= 0) {
         continue;
       }
@@ -335,7 +379,6 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
         ifAbsent: () => transaction.amount.abs(),
       );
     }
-
     final total = expensesByCategory.values.fold<double>(
       0,
       (sum, value) => sum + value,
@@ -343,7 +386,6 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     if (total <= 0) {
       return const <_PieSlice>[];
     }
-
     final palette = <Color>[
       const Color(0xFF4CAF50),
       AppTheme.blue,
@@ -356,10 +398,8 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     ];
     final sortedEntries = expensesByCategory.entries.toList()
       ..sort((left, right) => right.value.compareTo(left.value));
-
     final slices = <_PieSlice>[];
     var otherValue = 0.0;
-
     for (var index = 0; index < sortedEntries.length; index++) {
       final entry = sortedEntries[index];
       final percentage = entry.value / total * 100;
@@ -374,7 +414,6 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
         color: palette[index % palette.length],
       ));
     }
-
     if (otherValue > 0) {
       slices.add((
         category: 'Другое',
@@ -383,77 +422,55 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
         color: const Color(0xFF9E9E9E),
       ));
     }
-
     return slices;
   }
 
-  _ForecastSummary _buildForecastFromBackend(
-    List<ForecastPointModel> points,
-    DateTime anchorDate,
-  ) {
-    final forecastDays = math.min(30, points.length);
-    final incomeSpots = <FlSpot>[];
-    final expenseSpots = <FlSpot>[];
-    final dates = <DateTime>[];
-    var projectedBalance = 0.0;
-
-    for (var i = 0; i < forecastDays; i++) {
-      final point = points[math.min(i, points.length - 1)];
-      final balance = point.balance;
-      final prevBalance = i > 0 ? points[math.min(i - 1, points.length - 1)].balance : points[0].balance;
-      final dailyDelta = balance - prevBalance;
-      final dailyIncome = dailyDelta > 0 ? dailyDelta : 0.0;
-      final dailyExpense = dailyDelta < 0 ? dailyDelta.abs() : 0.0;
-
-      incomeSpots.add(FlSpot(i.toDouble(), dailyIncome));
-      expenseSpots.add(FlSpot(i.toDouble(), dailyExpense));
-      dates.add(_dateOnly(anchorDate).add(Duration(days: i + 1)));
-      projectedBalance += dailyIncome - dailyExpense;
-    }
-
+  _ForecastSummary _buildBackendForecast(List<ForecastPointModel> points) {
+    final cappedPoints = points.take(30).toList(growable: false);
+    final dates = cappedPoints
+        .map(
+          (point) => _dateOnly(DateTime.tryParse(point.isoDate) ?? _anchorDate),
+        )
+        .toList(growable: false);
     return (
-      incomeSpots: incomeSpots,
-      expenseSpots: expenseSpots,
+      primarySpots: cappedPoints
+          .asMap()
+          .entries
+          .map((entry) => FlSpot(entry.key.toDouble(), entry.value.balance))
+          .toList(growable: false),
+      secondarySpots: const <FlSpot>[],
       dates: dates,
-      projectedBalance: projectedBalance,
+      projectedBalance: cappedPoints.last.balance,
+      isBackendBalanceMode: true,
     );
   }
 
-  _ForecastSummary _buildForecastSummary(
-    List<_MonthlyBucket> monthlyBuckets,
-    DateTime anchorDate,
-  ) {
-    final incomeValues = monthlyBuckets
-        .map((bucket) => bucket.income)
-        .toList(growable: false);
-    final expenseValues = monthlyBuckets
-        .map((bucket) => bucket.expense)
-        .toList(growable: false);
-    final incomeRegression = _linearRegression(incomeValues);
-    final expenseRegression = _linearRegression(expenseValues);
-
+  _ForecastSummary _buildFallbackForecast() {
+    final incomeRegression = _linearRegression(
+      _monthlyBuckets.map((bucket) => bucket.income).toList(growable: false),
+    );
+    final expenseRegression = _linearRegression(
+      _monthlyBuckets.map((bucket) => bucket.expense).toList(growable: false),
+    );
     final incomeSpots = <FlSpot>[];
     final expenseSpots = <FlSpot>[];
     final dates = <DateTime>[];
     var projectedBalance = 0.0;
-
     for (var dayIndex = 0; dayIndex < 30; dayIndex++) {
       final x = 3 + (dayIndex / 30);
-      final predictedMonthlyIncome = _predictRegression(incomeRegression, x);
-      final predictedMonthlyExpense = _predictRegression(expenseRegression, x);
-      final dailyIncome = predictedMonthlyIncome / 30;
-      final dailyExpense = predictedMonthlyExpense / 30;
+      final dailyIncome = _predictRegression(incomeRegression, x) / 30;
+      final dailyExpense = _predictRegression(expenseRegression, x) / 30;
       incomeSpots.add(FlSpot(dayIndex.toDouble(), dailyIncome));
       expenseSpots.add(FlSpot(dayIndex.toDouble(), dailyExpense));
-      dates.add(_dateOnly(anchorDate).add(Duration(days: dayIndex + 1)));
+      dates.add(_dateOnly(_anchorDate).add(Duration(days: dayIndex + 1)));
       projectedBalance += dailyIncome - dailyExpense;
     }
-
     return (
-      incomeSpots: incomeSpots,
-      expenseSpots: expenseSpots,
+      primarySpots: incomeSpots,
+      secondarySpots: expenseSpots,
       dates: dates,
       projectedBalance: projectedBalance,
+      isBackendBalanceMode: false,
     );
   }
 
@@ -462,11 +479,7 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       return (slope: 0, intercept: 0);
     }
     final n = values.length.toDouble();
-    var sumX = 0.0;
-    var sumY = 0.0;
-    var sumXY = 0.0;
-    var sumXX = 0.0;
-
+    var sumX = 0.0, sumY = 0.0, sumXY = 0.0, sumXX = 0.0;
     for (var index = 0; index < values.length; index++) {
       final x = index.toDouble();
       final y = values[index];
@@ -475,7 +488,6 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       sumXY += x * y;
       sumXX += x * x;
     }
-
     final denominator = n * sumXX - (sumX * sumX);
     if (denominator == 0) {
       return (slope: 0, intercept: values.last);
@@ -488,22 +500,16 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
   double _predictRegression(
     ({double slope, double intercept}) regression,
     double x,
-  ) {
-    return math.max<double>(0, regression.intercept + regression.slope * x);
-  }
+  ) => math.max<double>(0, regression.intercept + regression.slope * x);
 
-  BarChartData _buildMonthlyBarChartData(
-    BuildContext context,
-    List<_MonthlyBucket> monthlyBuckets,
-  ) {
-    final maxValue = monthlyBuckets.fold<double>(
+  BarChartData _buildMonthlyBarChartData(BuildContext context) {
+    final maxValue = _monthlyBuckets.fold<double>(
       0,
       (currentMax, bucket) => math.max<double>(
         currentMax,
         math.max<double>(bucket.income, bucket.expense),
       ),
     );
-
     return BarChartData(
       minY: 0,
       maxY: math.max<double>(1, maxValue * 1.2),
@@ -532,13 +538,13 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
             reservedSize: 28,
             getTitlesWidget: (value, meta) {
               final index = value.toInt();
-              if (index < 0 || index >= monthlyBuckets.length) {
+              if (index < 0 || index >= _monthlyBuckets.length) {
                 return const SizedBox.shrink();
               }
               return Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  _shortMonth(monthlyBuckets[index].month),
+                  _shortMonth(_monthlyBuckets[index].month),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.secondaryText,
                     fontWeight: FontWeight.w600,
@@ -570,53 +576,47 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
           },
         ),
       ),
-      barGroups: monthlyBuckets
+      barGroups: _monthlyBuckets
           .asMap()
           .entries
-          .map((entry) {
-            final index = entry.key;
-            final bucket = entry.value;
-            return BarChartGroupData(
-              x: index,
+          .map(
+            (entry) => BarChartGroupData(
+              x: entry.key,
               barsSpace: 10,
               barRods: <BarChartRodData>[
                 BarChartRodData(
-                  toY: bucket.income,
+                  toY: entry.value.income,
                   width: 14,
                   color: const Color(0xFF4CAF50),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 BarChartRodData(
-                  toY: bucket.expense,
+                  toY: entry.value.expense,
                   width: 14,
                   color: const Color(0xFFE57373),
                   borderRadius: BorderRadius.circular(8),
                 ),
               ],
-            );
-          })
+            ),
+          )
           .toList(growable: false),
     );
   }
 
-  LineChartData _buildNetTrendChartData(
-    BuildContext context,
-    List<_DailyNetPoint> dailyNetSeries,
-  ) {
-    final spots = dailyNetSeries
+  LineChartData _buildNetTrendChartData(BuildContext context) {
+    final spots = _dailyNetSeries
         .asMap()
         .entries
         .map((entry) => FlSpot(entry.key.toDouble(), entry.value.value))
         .toList(growable: false);
-    final maxAbs = dailyNetSeries.fold<double>(
+    final maxAbs = _dailyNetSeries.fold<double>(
       0,
       (currentMax, point) => math.max<double>(currentMax, point.value.abs()),
     );
     final chartExtent = math.max<double>(1, maxAbs * 1.2);
-
     return LineChartData(
       minX: 0,
-      maxX: math.max<double>(1, dailyNetSeries.length - 1).toDouble(),
+      maxX: math.max<double>(1, _dailyNetSeries.length - 1).toDouble(),
       minY: -chartExtent,
       maxY: chartExtent,
       gridData: FlGridData(
@@ -643,20 +643,18 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
             interval: 15,
             getTitlesWidget: (value, meta) {
               final index = value.round();
-              if (index < 0 || index >= dailyNetSeries.length) {
+              if (index < 0 || index >= _dailyNetSeries.length) {
                 return const SizedBox.shrink();
               }
               final shouldShow =
                   index == 0 ||
-                  index == dailyNetSeries.length - 1 ||
+                  index == _dailyNetSeries.length - 1 ||
                   index % 15 == 0;
-              if (!shouldShow) {
-                return const SizedBox.shrink();
-              }
+              if (!shouldShow) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(
-                  _shortDayMonth(dailyNetSeries[index].date),
+                  _shortDayMonth(_dailyNetSeries[index].date),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.secondaryText,
                     fontWeight: FontWeight.w600,
@@ -675,7 +673,7 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
           getTooltipColor: (_) => AppTheme.surface,
           getTooltipItems: (spots) => spots
               .map((spot) {
-                final date = dailyNetSeries[spot.x.round()].date;
+                final date = _dailyNetSeries[spot.x.round()].date;
                 return LineTooltipItem(
                   '${_shortDayMonth(date)}\n${_signedAmount(spot.y)}',
                   const TextStyle(
@@ -724,64 +722,113 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     );
   }
 
-  PieChartData _buildPieChartData(
-    BuildContext context,
-    List<_PieSlice> pieSlices,
-  ) {
-    return PieChartData(
-      centerSpaceRadius: 44,
-      sectionsSpace: 3,
-      pieTouchData: PieTouchData(
-        enabled: true,
-        touchCallback: (event, response) {
-          final index = response?.touchedSection?.touchedSectionIndex ?? -1;
-          if (_touchedPieIndex == index) {
-            return;
-          }
-          setState(() {
-            _touchedPieIndex = index;
-          });
-        },
-      ),
-      sections: pieSlices
-          .asMap()
-          .entries
-          .map((entry) {
-            final index = entry.key;
-            final slice = entry.value;
-            final isTouched = index == _touchedPieIndex;
-            return PieChartSectionData(
-              value: slice.value,
-              color: slice.color,
-              radius: isTouched ? 92 : 82,
-              showTitle: isTouched,
-              title: '${slice.percentage.toStringAsFixed(1)}%',
-              titleStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
-              ),
-            );
-          })
-          .toList(growable: false),
-    );
-  }
+  PieChartData _buildPieChartData(BuildContext context) => PieChartData(
+    centerSpaceRadius: 44,
+    sectionsSpace: 3,
+    pieTouchData: PieTouchData(
+      enabled: true,
+      touchCallback: (event, response) {
+        final index = response?.touchedSection?.touchedSectionIndex ?? -1;
+        if (_touchedPieIndex == index) return;
+        setState(() => _touchedPieIndex = index);
+      },
+    ),
+    sections: _pieSlices
+        .asMap()
+        .entries
+        .map((entry) {
+          final isTouched = entry.key == _touchedPieIndex;
+          return PieChartSectionData(
+            value: entry.value.value,
+            color: entry.value.color,
+            radius: isTouched ? 92 : 82,
+            showTitle: isTouched,
+            title: '${entry.value.percentage.toStringAsFixed(1)}%',
+            titleStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+          );
+        })
+        .toList(growable: false),
+  );
 
-  LineChartData _buildForecastChartData(
-    BuildContext context,
-    _ForecastSummary forecast,
-  ) {
+  LineChartData _buildForecastChartData(BuildContext context) {
+    final maxX = math.max<double>(0, _forecast.dates.length - 1).toDouble();
+    if (_forecast.isBackendBalanceMode) {
+      final minY = <double>[
+        ..._forecast.primarySpots.map((spot) => spot.y),
+        0,
+      ].reduce(math.min);
+      final maxY = <double>[
+        ..._forecast.primarySpots.map((spot) => spot.y),
+        1,
+      ].reduce(math.max);
+      final padding = math.max<double>(1, (maxY - minY).abs() * 0.15);
+      return LineChartData(
+        minX: 0,
+        maxX: maxX,
+        minY: minY - padding,
+        maxY: maxY + padding,
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: math.max<double>(1, (maxY - minY).abs() / 3),
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: Colors.white.withValues(alpha: 0.07),
+            strokeWidth: 1,
+            dashArray: const <int>[4, 4],
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        titlesData: _forecastTitles(context),
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            fitInsideHorizontally: true,
+            fitInsideVertically: true,
+            getTooltipColor: (_) => AppTheme.surface,
+            getTooltipItems: (spots) => spots
+                .map((spot) {
+                  final date = _forecast.dates[spot.x.round()];
+                  return LineTooltipItem(
+                    'Баланс · ${_shortDayMonth(date)}\n${SomFormatter.amount(spot.y.abs())}',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  );
+                })
+                .toList(growable: false),
+          ),
+        ),
+        lineBarsData: <LineChartBarData>[
+          LineChartBarData(
+            spots: _forecast.primarySpots,
+            isCurved: true,
+            color: AppTheme.accent,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              color: AppTheme.accent.withValues(alpha: 0.15),
+            ),
+          ),
+        ],
+      );
+    }
+
     final maxY = <double>[
-      ...forecast.incomeSpots.map((spot) => spot.y),
-      ...forecast.expenseSpots.map((spot) => spot.y),
+      ..._forecast.primarySpots.map((spot) => spot.y),
+      ..._forecast.secondarySpots.map((spot) => spot.y),
       1,
     ].reduce(math.max);
-
     return LineChartData(
       minX: 0,
-      maxX: 29,
+      maxX: maxX,
       minY: 0,
       maxY: maxY * 1.2,
       gridData: FlGridData(
@@ -795,43 +842,7 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
         ),
       ),
       borderData: FlBorderData(show: false),
-      titlesData: FlTitlesData(
-        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(
-          sideTitles: SideTitles(showTitles: false),
-        ),
-        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            reservedSize: 28,
-            interval: 7,
-            getTitlesWidget: (value, meta) {
-              final index = value.round();
-              if (index < 0 || index >= forecast.dates.length) {
-                return const SizedBox.shrink();
-              }
-              final shouldShow =
-                  index == 0 ||
-                  index == forecast.dates.length - 1 ||
-                  index % 7 == 0;
-              if (!shouldShow) {
-                return const SizedBox.shrink();
-              }
-              return Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _shortDayMonth(forecast.dates[index]),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.secondaryText,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
+      titlesData: _forecastTitles(context),
       lineTouchData: LineTouchData(
         enabled: true,
         touchTooltipData: LineTouchTooltipData(
@@ -840,10 +851,9 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
           getTooltipColor: (_) => AppTheme.surface,
           getTooltipItems: (spots) => spots
               .map((spot) {
-                final isIncome = spot.bar.color == const Color(0xFF4CAF50);
-                final label = isIncome ? 'Доходы' : 'Расходы';
+                final label = spot.barIndex == 0 ? 'Доходы' : 'Расходы';
                 return LineTooltipItem(
-                  '$label · ${_shortDayMonth(forecast.dates[spot.x.round()])}\n${SomFormatter.amount(spot.y)}',
+                  '$label · ${_shortDayMonth(_forecast.dates[spot.x.round()])}\n${SomFormatter.amount(spot.y)}',
                   const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -856,7 +866,7 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       ),
       lineBarsData: <LineChartBarData>[
         LineChartBarData(
-          spots: forecast.incomeSpots,
+          spots: _forecast.primarySpots,
           isCurved: true,
           color: const Color(0xFF4CAF50),
           dashArray: const <int>[6, 4],
@@ -868,7 +878,7 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
           ),
         ),
         LineChartBarData(
-          spots: forecast.expenseSpots,
+          spots: _forecast.secondarySpots,
           isCurved: true,
           color: const Color(0xFFE57373),
           dashArray: const <int>[6, 4],
@@ -882,6 +892,40 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       ],
     );
   }
+
+  FlTitlesData _forecastTitles(BuildContext context) => FlTitlesData(
+    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 28,
+        interval: 7,
+        getTitlesWidget: (value, meta) {
+          final index = value.round();
+          if (index < 0 || index >= _forecast.dates.length) {
+            return const SizedBox.shrink();
+          }
+          final shouldShow =
+              index == 0 ||
+              index == _forecast.dates.length - 1 ||
+              index % 7 == 0;
+          if (!shouldShow) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _shortDayMonth(_forecast.dates[index]),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppTheme.secondaryText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        },
+      ),
+    ),
+  );
 
   DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
@@ -922,125 +966,8 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     return '${value.day} ${months[value.month - 1]}';
   }
 
-  String _signedAmount(double value) {
-    final sign = value >= 0 ? '+' : '−';
-    return '$sign${SomFormatter.amount(value.abs())}';
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppTheme.secondaryText,
-            height: 1.4,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _GlassChartCard extends StatelessWidget {
-  const _GlassChartCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-    this.footer,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget child;
-  final Widget? footer;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.secondaryText,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 18),
-              child,
-              if (footer != null) ...<Widget>[
-                const SizedBox(height: 18),
-                footer!,
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ResponsiveChart extends StatelessWidget {
-  const _ResponsiveChart({required this.builder});
-
-  final Widget Function(double height) builder;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final targetHeight = (constraints.maxWidth * 0.65).clamp(200.0, 320.0);
-        return SizedBox(height: targetHeight, child: builder(targetHeight));
-      },
-    );
-  }
-}
-
-class _AnimatedChart extends StatelessWidget {
-  const _AnimatedChart({required this.animation, required this.child});
-
-  final Animation<double> animation;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(opacity: animation, child: child);
-  }
+  String _signedAmount(double value) =>
+      '${value >= 0 ? '+' : '−'}${SomFormatter.amount(value.abs())}';
 }
 
 class _LegendRow extends StatelessWidget {
@@ -1096,7 +1023,6 @@ class _PieLegend extends StatelessWidget {
         ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),
       );
     }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: slices

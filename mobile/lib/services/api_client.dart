@@ -23,7 +23,7 @@ class ApiClient {
     return 'http://localhost:8080/api/v1';
   }
 
-  static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _requestTimeout = Duration(seconds: 45);
 
   Future<dynamic> getJson(String path) async {
     final response = await _httpClient

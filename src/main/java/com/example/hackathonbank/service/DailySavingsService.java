@@ -166,16 +166,17 @@ public class DailySavingsService {
         BigDecimal requiredPayments = scheduledPaymentRepository
                 .findByUserIdAndStatusInOrderByDueDateAsc(user.getId(), List.of(PaymentStatus.SCHEDULED, PaymentStatus.POSTPONED))
                 .stream()
+                .filter(payment -> payment.getAccount().getType() == AccountType.MAIN)
                 .filter(payment -> !payment.getDueDate().isBefore(currentDate))
                 .filter(payment -> !payment.getDueDate().isAfter(nextIncomeDate))
                 .map(ScheduledPayment::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         SpendProfileService.SpendProfile spendProfile = spendProfileService.buildProfile(user.getId(), currentDate);
-        BigDecimal averageDailySpend = spendProfile.dailyTotal();
-        BigDecimal lifeBuffer = averageDailySpend
-                .multiply(BigDecimal.valueOf(daysToNextIncome))
-                .multiply(LIFE_BUFFER_MULTIPLIER)
+        BigDecimal projectedSpendBeforeIncome = projectedSpendUntilIncome(spendProfile, currentDate, daysToNextIncome);
+        BigDecimal lifeBufferMultiplier = LIFE_BUFFER_MULTIPLIER.add(volatilityReserve(spendProfile));
+        BigDecimal lifeBuffer = projectedSpendBeforeIncome
+                .multiply(lifeBufferMultiplier)
                 .setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal safeBalance = balances.main().getBalance()
@@ -333,6 +334,22 @@ public class DailySavingsService {
 
     private String money(BigDecimal amount) {
         return amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " KGS";
+    }
+
+    private BigDecimal projectedSpendUntilIncome(SpendProfileService.SpendProfile spendProfile,
+                                                 LocalDate currentDate,
+                                                 int daysToNextIncome) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (int day = 0; day < daysToNextIncome; day++) {
+            total = total.add(spendProfile.projectedSpend(currentDate.plusDays(day).getDayOfWeek()));
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal volatilityReserve(SpendProfileService.SpendProfile spendProfile) {
+        BigDecimal adjustment = spendProfile.volatility().multiply(new BigDecimal("0.25"));
+        BigDecimal cap = new BigDecimal("0.25");
+        return adjustment.compareTo(cap) > 0 ? cap : adjustment;
     }
 
     private record DailySavingsCalculation(

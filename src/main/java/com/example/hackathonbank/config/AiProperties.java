@@ -9,10 +9,10 @@ import java.util.List;
 public class AiProperties {
 
     private boolean enabled = true;
-    private String primaryModel = "openrouter/free";
+    private String primaryModel = "grok-4";
     private List<String> fallbackModels = new ArrayList<>();
     private double temperature = 0.15;
-    private int requestTimeoutSeconds = 8;
+    private int requestTimeoutSeconds = 30;
 
     public boolean isEnabled() {
         return enabled;

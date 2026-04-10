@@ -178,6 +178,8 @@ public class AiChatContextBuilder {
                 .toList());
         features.put("nextIncomeDate", calendar.nextExpectedDate().toString());
         features.put("incomeConfidence", calendar.confidencePercent());
+        features.put("incomeWindowStart", calendar.rangeStart().toString());
+        features.put("incomeWindowEnd", calendar.rangeEnd().toString());
 
         features.put("burnRate", spendProfile.dailyTotal());
         features.put("burnRateEssential", spendProfile.dailyEssentialSpend());
@@ -204,6 +206,7 @@ public class AiChatContextBuilder {
                 .orElse(null);
         if (mainAccount != null) {
             var requiredPayments = dashboard.scheduledPayments().stream()
+                    .filter(payment -> payment.accountId().equals(mainAccount.id()))
                     .map(com.example.hackathonbank.ai.dto.ScheduledPaymentSnapshot::amount)
                     .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
             features.put("freeBalance", mainAccount.balance().subtract(requiredPayments));

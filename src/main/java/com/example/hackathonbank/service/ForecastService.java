@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ public class ForecastService {
         SpendProfileService.SpendProfile spendProfile = spendProfileService.buildProfile(userId, today);
 
         List<ScheduledPayment> paymentsInWindow = pendingPayments.stream()
+                .filter(payment -> payment.getAccount().getType() == AccountType.MAIN)
                 .filter(payment -> !payment.getDueDate().isBefore(today))
                 .filter(payment -> !payment.getDueDate().isAfter(today.plusDays(horizonDays)))
                 .sorted(Comparator.comparing(ScheduledPayment::getDueDate))
@@ -68,6 +70,13 @@ public class ForecastService {
                         ScheduledPayment::getDueDate,
                         Collectors.reducing(BigDecimal.ZERO, ScheduledPayment::getAmount, BigDecimal::add)
                 ));
+        Map<LocalDate, BigDecimal> incomeByDate = incomeCalendarService
+                .projectedIncomeEvents(incomeCalendar, today.plusDays(1), today.plusDays(horizonDays), 50)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        IncomeCalendarService.ProjectedIncomeEvent::conservativeDate,
+                        Collectors.reducing(BigDecimal.ZERO, IncomeCalendarService.ProjectedIncomeEvent::expectedAmount, BigDecimal::add)
+                ));
 
         BigDecimal minimumProjectedBalance = mainAccount.getBalance();
         List<DashboardPoint> points = new ArrayList<>();
@@ -75,10 +84,13 @@ public class ForecastService {
 
         for (int day = 0; day <= horizonDays; day++) {
             LocalDate targetDate = today.plusDays(day);
+            BigDecimal dailySpend = BigDecimal.ZERO;
+            BigDecimal scheduledOutflow = BigDecimal.ZERO;
+            BigDecimal projectedIncome = BigDecimal.ZERO;
             if (day > 0) {
-                BigDecimal dailySpend = spendProfile.projectedSpend(targetDate.getDayOfWeek());
-                BigDecimal scheduledOutflow = paymentsByDate.getOrDefault(targetDate, BigDecimal.ZERO);
-                BigDecimal projectedIncome = projectedIncomeForDate(incomeCalendar, targetDate);
+                dailySpend = spendProfile.projectedSpend(targetDate.getDayOfWeek());
+                scheduledOutflow = paymentsByDate.getOrDefault(targetDate, BigDecimal.ZERO);
+                projectedIncome = incomeByDate.getOrDefault(targetDate, BigDecimal.ZERO);
                 runningBalance = runningBalance
                         .subtract(dailySpend)
                         .subtract(scheduledOutflow)
@@ -87,7 +99,14 @@ public class ForecastService {
             if (runningBalance.compareTo(minimumProjectedBalance) < 0) {
                 minimumProjectedBalance = runningBalance;
             }
-            points.add(new DashboardPoint(day, targetDate.toString(), targetDate.format(LABEL_FORMATTER), runningBalance));
+            points.add(new DashboardPoint(
+                    day,
+                    targetDate.toString(),
+                    targetDate.format(LABEL_FORMATTER),
+                    runningBalance,
+                    projectedIncome.setScale(2, RoundingMode.HALF_UP),
+                    dailySpend.add(scheduledOutflow).setScale(2, RoundingMode.HALF_UP)
+            ));
         }
 
         List<ScheduledPaymentSnapshot> paymentSnapshots = paymentsInWindow.stream()
@@ -115,26 +134,6 @@ public class ForecastService {
                 points,
                 paymentSnapshots
         );
-    }
-
-    private BigDecimal projectedIncomeForDate(IncomeCalendarService.IncomeCalendar calendar, LocalDate date) {
-        BigDecimal income = BigDecimal.ZERO;
-        for (IncomeCalendarService.IncomeCluster cluster : calendar.clusters()) {
-            if (cluster.confidence() < 50.0) {
-                continue;
-            }
-            if (matchesClusterDay(date, cluster)) {
-                income = income.add(cluster.averageAmount());
-            }
-        }
-        return income;
-    }
-
-    private boolean matchesClusterDay(LocalDate date, IncomeCalendarService.IncomeCluster cluster) {
-        int normalizedDay = Math.min(cluster.dayOfMonth(), date.lengthOfMonth());
-        int tolerance = cluster.confidence() >= 100.0 ? 1 : 2;
-        int actualDay = date.getDayOfMonth();
-        return Math.abs(actualDay - normalizedDay) <= tolerance;
     }
 
     private LocalDate currentDate() {

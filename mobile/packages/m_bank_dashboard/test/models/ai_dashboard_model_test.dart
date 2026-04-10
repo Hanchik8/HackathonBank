@@ -15,12 +15,16 @@ void main() {
             'isoDate': '2026-03-15',
             'label': '15 мар.',
             'balance': 15000.0,
+            'projectedIncome': 24000.0,
+            'projectedExpense': 1200.0,
           },
           {
             'dayOffset': 1,
             'isoDate': '2026-03-16',
             'label': '16 мар.',
             'balance': 14000.0,
+            'projectedIncome': 0.0,
+            'projectedExpense': 1000.0,
           },
         ],
         'scheduledPayments': <Map<String, dynamic>>[],
@@ -34,7 +38,9 @@ void main() {
       expect(model.horizonDays, 30);
       expect(model.points, hasLength(2));
       expect(model.points.first.dayOffset, 0);
+      expect(model.points.first.projectedIncome, 24000.0);
       expect(model.points.last.balance, 14000.0);
+      expect(model.points.last.projectedExpense, 1000.0);
       expect(model.scheduledPayments, isEmpty);
     });
 
@@ -48,7 +54,10 @@ void main() {
         scheduledPayments: const [],
       );
 
-      final updated = original.copyWith(currentBalance: 20000.0, horizonDays: 30);
+      final updated = original.copyWith(
+        currentBalance: 20000.0,
+        horizonDays: 30,
+      );
 
       expect(updated.currentBalance, 20000.0);
       expect(updated.horizonDays, 30);
@@ -64,6 +73,8 @@ void main() {
         'isoDate': '2026-03-20',
         'label': '20 мар.',
         'balance': 8000.0,
+        'projectedIncome': 500.0,
+        'projectedExpense': 1200.0,
       };
 
       final model = ForecastPointModel.fromJson(json);
@@ -72,9 +83,11 @@ void main() {
       expect(model.isoDate, '2026-03-20');
       expect(model.label, '20 мар.');
       expect(model.balance, 8000.0);
+      expect(model.projectedIncome, 500.0);
+      expect(model.projectedExpense, 1200.0);
     });
 
-    test('fromJson handles integer balance', () {
+    test('fromJson handles integer balance and missing projected fields', () {
       final json = <String, dynamic>{
         'dayOffset': 0,
         'isoDate': '2026-03-15',
@@ -85,6 +98,8 @@ void main() {
       final model = ForecastPointModel.fromJson(json);
 
       expect(model.balance, 12000.0);
+      expect(model.projectedIncome, 0.0);
+      expect(model.projectedExpense, 0.0);
     });
   });
 }
