@@ -2,34 +2,41 @@ package com.example.hackathonbank.repository;
 
 import com.example.hackathonbank.model.Transaction;
 import com.example.hackathonbank.model.TransactionStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.account LEFT JOIN FETCH t.smartCategory WHERE t.user.id = :userId ORDER BY t.occurredAt DESC")
+    @EntityGraph(attributePaths = {"account", "smartCategory"})
+    @Query("SELECT t FROM Transaction t WHERE t.user.id = :userId ORDER BY t.occurredAt DESC")
     List<Transaction> findByUserIdWithRelationsOrderByOccurredAtDesc(@Param("userId") Long userId);
 
-    @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.account LEFT JOIN FETCH t.smartCategory WHERE t.user.id = :userId AND t.occurredAt BETWEEN :start AND :end ORDER BY t.occurredAt DESC")
+    @EntityGraph(attributePaths = {"account", "smartCategory"})
+    @Query("SELECT t FROM Transaction t WHERE t.user.id = :userId AND t.occurredAt BETWEEN :start AND :end ORDER BY t.occurredAt DESC")
     List<Transaction> findByUserIdWithRelationsBetween(@Param("userId") Long userId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    @Query("SELECT t FROM Transaction t WHERE t.user.id = :userId ORDER BY t.occurredAt DESC")
     List<Transaction> findByUserIdOrderByOccurredAtDesc(Long userId);
 
+    @Query("SELECT t FROM Transaction t WHERE t.user.id = :userId AND t.status = :status AND t.occurredAt BETWEEN :windowStart AND :windowEnd ORDER BY t.occurredAt DESC")
     List<Transaction> findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(Long userId,
                                                                                      TransactionStatus status,
                                                                                      LocalDateTime windowStart,
                                                                                      LocalDateTime windowEnd);
 
+    @Query("SELECT t FROM Transaction t WHERE t.user.id = :userId AND t.smartCategory.id = :smartCategoryId")
     List<Transaction> findByUserIdAndSmartCategoryId(Long userId, Long smartCategoryId);
 
+    @Query("SELECT t FROM Transaction t WHERE t.scheduledPayment.id = :scheduledPaymentId")
     Optional<Transaction> findByScheduledPaymentId(Long scheduledPaymentId);
 
+    @Query("SELECT t FROM Transaction t WHERE t.id = :id AND t.user.id = :userId")
     Optional<Transaction> findByIdAndUserId(Long id, Long userId);
 
     @Query("""

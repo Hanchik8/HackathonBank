@@ -27,4 +27,9 @@ public class BankingAgentTools {
     public ActionExecutionResult postponePayment(Long paymentId) {
         return scheduledPaymentService.postponePayment(paymentId);
     }
+
+    @Tool(description = "Получить список будущих (ожидающих) запланированных платежей пользователя.")
+    public java.util.List<com.example.hackathonbank.model.ScheduledPayment> getUpcomingScheduledPayments() {
+        return scheduledPaymentService.getPendingPayments();
+    }
 }
