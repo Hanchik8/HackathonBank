@@ -64,12 +64,16 @@ class ForecastPointModel {
     required this.isoDate,
     required this.label,
     required this.balance,
+    this.projectedIncome = 0,
+    this.projectedExpense = 0,
   });
 
   final int dayOffset;
   final String isoDate;
   final String label;
   final double balance;
+  final double projectedIncome;
+  final double projectedExpense;
 
   factory ForecastPointModel.fromJson(Map<String, dynamic> json) {
     return ForecastPointModel(
@@ -77,6 +81,8 @@ class ForecastPointModel {
       isoDate: json['isoDate'] as String,
       label: json['label'] as String,
       balance: (json['balance'] as num).toDouble(),
+      projectedIncome: ((json['projectedIncome'] ?? 0) as num).toDouble(),
+      projectedExpense: ((json['projectedExpense'] ?? 0) as num).toDouble(),
     );
   }
 }

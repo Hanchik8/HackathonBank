@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS scheduled_payments (
     due_date DATE NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'SCHEDULED',
     reminder BOOLEAN NOT NULL DEFAULT FALSE,
+    flexible BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_scheduled_payments_user FOREIGN KEY (user_id) REFERENCES bank_users(id),
     CONSTRAINT fk_scheduled_payments_account FOREIGN KEY (account_id) REFERENCES accounts(id)
 );

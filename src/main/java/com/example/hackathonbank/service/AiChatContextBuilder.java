@@ -32,6 +32,9 @@ public class AiChatContextBuilder {
     private final ScheduledPaymentService scheduledPaymentService;
     private final DailySavingsService dailySavingsService;
     private final SmartCategoryService smartCategoryService;
+    private final IncomeCalendarService incomeCalendarService;
+    private final SpendProfileService spendProfileService;
+    private final ForecastService forecastService;
     private final ObjectMapper objectMapper;
 
     public AiChatContextBuilder(UserContextService userContextService,
@@ -41,6 +44,9 @@ public class AiChatContextBuilder {
                                 ScheduledPaymentService scheduledPaymentService,
                                 DailySavingsService dailySavingsService,
                                 SmartCategoryService smartCategoryService,
+                                IncomeCalendarService incomeCalendarService,
+                                SpendProfileService spendProfileService,
+                                ForecastService forecastService,
                                 ObjectMapper objectMapper) {
         this.userContextService = userContextService;
         this.userSettingsService = userSettingsService;
@@ -49,6 +55,9 @@ public class AiChatContextBuilder {
         this.scheduledPaymentService = scheduledPaymentService;
         this.dailySavingsService = dailySavingsService;
         this.smartCategoryService = smartCategoryService;
+        this.incomeCalendarService = incomeCalendarService;
+        this.spendProfileService = spendProfileService;
+        this.forecastService = forecastService;
         this.objectMapper = objectMapper;
     }
 
@@ -144,7 +153,78 @@ public class AiChatContextBuilder {
                 ))
                 .toList());
 
+        context.put("derivedFeatures", buildDerivedFeatures(user.getId(), currentDate, transactions, accounts));
+
         return objectMapper.valueToTree(context);
+    }
+
+    private Map<String, Object> buildDerivedFeatures(Long userId,
+                                                      LocalDate currentDate,
+                                                      List<Transaction> transactions,
+                                                      List<AccountResponse> accounts) {
+        IncomeCalendarService.IncomeCalendar calendar = incomeCalendarService.buildCalendar(userId, currentDate);
+        SpendProfileService.SpendProfile spendProfile = spendProfileService.buildProfile(userId, currentDate);
+
+        LinkedHashMap<String, Object> features = new LinkedHashMap<>();
+
+        features.put("incomeCalendar", calendar.clusters().stream()
+                .map(cluster -> Map.of(
+                        "type", cluster.type().name(),
+                        "dayOfMonth", cluster.dayOfMonth(),
+                        "averageAmount", cluster.averageAmount(),
+                        "occurrences", cluster.occurrences(),
+                        "confidence", cluster.confidence()
+                ))
+                .toList());
+        features.put("nextIncomeDate", calendar.nextExpectedDate().toString());
+        features.put("incomeConfidence", calendar.confidencePercent());
+        features.put("incomeWindowStart", calendar.rangeStart().toString());
+        features.put("incomeWindowEnd", calendar.rangeEnd().toString());
+
+        features.put("burnRate", spendProfile.dailyTotal());
+        features.put("burnRateEssential", spendProfile.dailyEssentialSpend());
+        features.put("burnRateDiscretionary", spendProfile.dailyDiscretionarySpend());
+        features.put("burnRateVolatility", spendProfile.volatility());
+
+        LinkedHashMap<String, Object> weekdayProfile = new LinkedHashMap<>();
+        spendProfile.weekdayMultipliers().forEach((day, mult) -> weekdayProfile.put(day.name(), mult));
+        features.put("weekdaySpendProfile", weekdayProfile);
+
+        var dashboard = forecastService.buildDashboard(30);
+        int daysToNegative = -1;
+        for (var point : dashboard.points()) {
+            if (point.balance().compareTo(java.math.BigDecimal.ZERO) < 0) {
+                daysToNegative = point.dayOffset();
+                break;
+            }
+        }
+        features.put("daysToNegativeBalance", daysToNegative);
+
+        AccountResponse mainAccount = accounts.stream()
+                .filter(a -> "MAIN".equals(a.type()))
+                .findFirst()
+                .orElse(null);
+        if (mainAccount != null) {
+            var requiredPayments = dashboard.scheduledPayments().stream()
+                    .filter(payment -> payment.accountId().equals(mainAccount.id()))
+                    .map(com.example.hackathonbank.ai.dto.ScheduledPaymentSnapshot::amount)
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            features.put("freeBalance", mainAccount.balance().subtract(requiredPayments));
+        }
+
+        LinkedHashMap<String, Long> merchantCounts = new LinkedHashMap<>();
+        transactions.stream()
+                .filter(t -> t.getAmount().compareTo(java.math.BigDecimal.ZERO) < 0)
+                .filter(t -> t.getCounterparty() != null && !t.getCounterparty().isBlank())
+                .forEach(t -> merchantCounts.merge(t.getCounterparty(), 1L, Long::sum));
+        List<String> topMerchants = merchantCounts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(5)
+                .map(Map.Entry::getKey)
+                .toList();
+        features.put("recurringMerchants", topMerchants);
+
+        return features;
     }
 
     private Map<String, Object> balancesContext(List<AccountResponse> accounts) {

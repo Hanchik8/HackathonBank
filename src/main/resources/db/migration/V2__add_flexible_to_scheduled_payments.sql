@@ -1,0 +1,1 @@
+-- flexible column already included in V1; this migration is intentionally empty.

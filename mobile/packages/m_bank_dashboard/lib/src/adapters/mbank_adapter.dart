@@ -320,6 +320,12 @@ class MbankAdapter implements DashboardRepository {
     );
   }
 
+  @override
+  Future<List<ForecastPointModel>> fetchForecastPoints(int days) async {
+    final dashboard = await _client.getDashboardData(days);
+    return dashboard.points.map(_mapForecastPoint).toList();
+  }
+
   AccountModel _mapAccount(ExistingMbankAccount account) {
     return AccountModel(
       id: account.id,

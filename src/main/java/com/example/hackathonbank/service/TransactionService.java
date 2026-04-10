@@ -130,6 +130,22 @@ public class TransactionService {
         return transactionRepository.findByScheduledPaymentId(paymentId);
     }
 
+    @Transactional
+    public void assignTransactionToSmartCategory(Long transactionId, Long smartCategoryId) {
+        Transaction transaction = transactionRepository.findByIdAndUserId(
+                        transactionId,
+                        userContextService.getCurrentUser().getId()
+                )
+                .orElseThrow(() -> new IllegalArgumentException("Транзакция не найдена."));
+        if (transaction.getStatus() != TransactionStatus.COMPLETED || transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
+            throw new IllegalArgumentException("В Smart List можно добавить только завершенный расход.");
+        }
+
+        SmartCategory smartCategory = smartCategoryService.getOwnedCategory(smartCategoryId);
+        transaction.setSmartCategory(smartCategory);
+        transactionRepository.save(transaction);
+    }
+
     private BigDecimal normalizeAmount(TransactionType type, BigDecimal amount) {
         return switch (type) {
             case INCOME -> amount.abs();

@@ -4,8 +4,10 @@ import com.example.hackathonbank.controller.dto.BooleanSettingRequest;
 import com.example.hackathonbank.controller.dto.BooleanSettingResponse;
 import com.example.hackathonbank.controller.dto.SmartCategoryCreateRequest;
 import com.example.hackathonbank.controller.dto.SmartCategoryFavoriteRequest;
+import com.example.hackathonbank.controller.dto.SmartCategoryLinkTransactionRequest;
 import com.example.hackathonbank.controller.dto.SmartCategoryResponse;
 import com.example.hackathonbank.service.SmartCategoryService;
+import com.example.hackathonbank.service.TransactionService;
 import com.example.hackathonbank.service.UserSettingsService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,11 +24,14 @@ import java.util.List;
 public class SmartCategoryController {
 
     private final SmartCategoryService smartCategoryService;
+    private final TransactionService transactionService;
     private final UserSettingsService userSettingsService;
 
     public SmartCategoryController(SmartCategoryService smartCategoryService,
+                                   TransactionService transactionService,
                                    UserSettingsService userSettingsService) {
         this.smartCategoryService = smartCategoryService;
+        this.transactionService = transactionService;
         this.userSettingsService = userSettingsService;
     }
 
@@ -38,6 +43,17 @@ public class SmartCategoryController {
     @PostMapping
     public SmartCategoryResponse createCategory(@Valid @RequestBody SmartCategoryCreateRequest request) {
         return smartCategoryService.createCategory(request);
+    }
+
+    @PostMapping("/link-transaction")
+    public SmartCategoryResponse createCategoryAndLinkTransaction(
+            @Valid @RequestBody SmartCategoryLinkTransactionRequest request
+    ) {
+        SmartCategoryResponse category = smartCategoryService.createCategory(
+                new SmartCategoryCreateRequest(request.name(), request.plannedMonthly())
+        );
+        transactionService.assignTransactionToSmartCategory(request.transactionId(), category.id());
+        return category;
     }
 
     @PostMapping("/{categoryId}/favorite")

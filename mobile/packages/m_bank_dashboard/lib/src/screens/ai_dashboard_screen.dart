@@ -919,6 +919,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
                 pageBuilder: (routeContext, animation, secondaryAnimation) =>
                     DetailedAnalyticsScreen(
                       transactions: _transactions ?? const <TransactionModel>[],
+                      backendForecastPoints: _dashboard?.points,
                     ),
                 transitionsBuilder:
                     (routeContext, animation, secondaryAnimation, child) =>

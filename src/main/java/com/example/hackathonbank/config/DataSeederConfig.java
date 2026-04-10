@@ -19,13 +19,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 @Configuration
 public class DataSeederConfig {
+
+    private static final BigDecimal TARGET_MAIN_BALANCE = new BigDecimal("15000.00");
+    private static final BigDecimal SAVINGS_BALANCE = new BigDecimal("50000.00");
+    private static final BigDecimal MAIN_START_CAPITAL = new BigDecimal("20000.00");
 
     @Bean
     public CommandLineRunner seedBankData(UserRepository userRepository,
@@ -42,60 +49,20 @@ public class DataSeederConfig {
             userSettingsRepository.save(new UserSettings(user, true, false, LocalDate.now()));
 
             Account mainAccount = accountRepository.save(
-                    new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS")
+                    new Account(user, AccountType.MAIN, "Main", BigDecimal.ZERO, "KGS")
             );
             accountRepository.save(
-                    new Account(user, AccountType.SAVINGS, "Savings", new BigDecimal("50000.00"), "KGS")
+                    new Account(user, AccountType.SAVINGS, "Savings", SAVINGS_BALANCE, "KGS")
             );
 
             LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+            Random random = new Random(42);
             List<Transaction> transactions = new ArrayList<>();
 
-            transactions.add(transaction(user, mainAccount, null, "Зарплата", "Tech Corp", "118000.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(84)));
-            transactions.add(transaction(user, mainAccount, null, "Аренда", "Landlord", "-25000.00", "Жилье", "home", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(83).plusHours(2)));
-            transactions.add(transaction(user, mainAccount, null, "Супермаркет", "Globus", "-5400.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(80)));
-            transactions.add(transaction(user, mainAccount, null, "Такси", "Yandex Go", "-1350.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(79).plusHours(5)));
-            transactions.add(transaction(user, mainAccount, null, "Ресторан", "Navat", "-4600.00", "Рестораны", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(77)));
-            transactions.add(transaction(user, mainAccount, null, "Мобильная связь", "MegaCom", "-950.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(74)));
-            transactions.add(transaction(user, mainAccount, null, "Возврат", "O!", "1200.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(72).plusHours(4)));
-            transactions.add(transaction(user, mainAccount, null, "Фитнес", "JFC Gym", "-3900.00", "Здоровье", "health", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(69)));
-
-            transactions.add(transaction(user, mainAccount, null, "Зарплата", "Tech Corp", "121000.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(56)));
-            transactions.add(transaction(user, mainAccount, null, "QR оплата", "Тулпар", "-17.00", "Транспорт", "qr", TransactionType.QR_TRANSFER, TransactionStatus.COMPLETED, now.minusDays(55).plusHours(7)));
-            transactions.add(transaction(user, mainAccount, null, "Обед", "VTS GTS Canteen", "-100.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(54).plusHours(3)));
-            transactions.add(transaction(user, mainAccount, null, "Маркетплейс", "Wildberries", "-8450.00", "Покупки", "shopping", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(51)));
-            transactions.add(transaction(user, mainAccount, null, "Перевод другу", "Nurlan", "-2800.00", "Переводы", "transfer", TransactionType.TRANSFER, TransactionStatus.COMPLETED, now.minusDays(49)));
-            transactions.add(transaction(user, mainAccount, null, "Кофе", "Adriano", "-280.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(46).plusHours(2)));
-            transactions.add(transaction(user, mainAccount, null, "Кино", "Манас Cinema", "-1750.00", "Развлечения", "entertainment", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(44)));
-            transactions.add(transaction(user, mainAccount, null, "Возврат за билет", "AirManas", "2300.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(41)));
-
-            transactions.add(transaction(user, mainAccount, null, "Зарплата", "Tech Corp", "119500.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(28)));
-            transactions.add(transaction(user, mainAccount, null, "АЗС", "Газпромнефть", "-5200.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(27).plusHours(6)));
-            transactions.add(transaction(user, mainAccount, null, "Ресторан", "Бублик", "-3250.00", "Рестораны", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(24)));
-            transactions.add(transaction(user, mainAccount, null, "Супермаркет", "Фрунзе", "-6700.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(22)));
-            transactions.add(transaction(user, mainAccount, null, "Подписка", "Spotify", "-299.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(21)));
-            transactions.add(transaction(user, mainAccount, null, "Зарплата", "Tech Corp", "120000.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(18)));
-            transactions.add(transaction(user, mainAccount, null, "Продукты", "Green Market", "-6200.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(17)));
-            transactions.add(transaction(user, mainAccount, null, "Кофе", "Coffee Room", "-1500.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(17).plusHours(5)));
-            transactions.add(transaction(user, mainAccount, null, "QR перевод", "Aigerim", "-3500.00", "Переводы", "qr", TransactionType.QR_TRANSFER, TransactionStatus.COMPLETED, now.minusDays(16)));
-            transactions.add(transaction(user, mainAccount, null, "Такси", "Yandex Go", "-2200.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(15)));
-            transactions.add(transaction(user, mainAccount, null, "Кино", "Kinoplexx", "-4800.00", "Развлечения", "entertainment", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(14)));
-            transactions.add(transaction(user, mainAccount, null, "Интернет", "HomeNet", "-3900.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(13)));
-            transactions.add(transaction(user, mainAccount, null, "Аптека", "Europharma", "-2800.00", "Здоровье", "health", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(12)));
-            transactions.add(transaction(user, mainAccount, null, "АЗС", "Sinooil", "-9000.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(11)));
-            transactions.add(transaction(user, mainAccount, null, "Фриланс", "Freelance client", "35000.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(10)));
-            transactions.add(transaction(user, mainAccount, null, "Ресторан", "Pinsa", "-7200.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(9)));
-            transactions.add(transaction(user, mainAccount, null, "Стриминг", "Movie+", "-1990.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(8)));
-            transactions.add(transaction(user, mainAccount, null, "Маркетплейс", "Kaspi Shop", "-14500.00", "Покупки", "shopping", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(7)));
-            transactions.add(transaction(user, mainAccount, null, "QR перевод", "Daniyar", "-5400.00", "Переводы", "qr", TransactionType.QR_TRANSFER, TransactionStatus.COMPLETED, now.minusDays(6)));
-            transactions.add(transaction(user, mainAccount, null, "Супермаркет", "Magnum", "-8100.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(5)));
-            transactions.add(transaction(user, mainAccount, null, "Автобус", "Onay", "-850.00", "Транспорт", "transport", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(4)));
-            transactions.add(transaction(user, mainAccount, null, "Мобильная связь", "Beeline", "-2000.00", "Подписки", "subscription", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusDays(3)));
-            transactions.add(transaction(user, mainAccount, null, "Подарок", "Friend", "-6000.00", "Развлечения", "gift", TransactionType.TRANSFER, TransactionStatus.COMPLETED, now.minusDays(2)));
-            transactions.add(transaction(user, mainAccount, null, "Кэшбэк", "Bank bonus", "2400.00", "Поступления", "income", TransactionType.INCOME, TransactionStatus.COMPLETED, now.minusDays(1).minusHours(3)));
-            transactions.add(transaction(user, mainAccount, null, "Оплата по QR", "Тулпар", "-17.00", "Транспорт", "qr", TransactionType.QR_TRANSFER, TransactionStatus.COMPLETED, now.minusDays(1).plusHours(2)));
-            transactions.add(transaction(user, mainAccount, null, "Минимаркет", "У дома", "-680.00", "Еда", "food", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusHours(12)));
-            transactions.add(transaction(user, mainAccount, null, "Покупка техники", "TechnoDom", "-12990.00", "Покупки", "shopping", TransactionType.PURCHASE, TransactionStatus.COMPLETED, now.minusHours(6)));
+            seedIncomeTransactions(user, mainAccount, now, transactions);
+            seedExpenseTransactions(user, mainAccount, now, random, transactions);
+            seedRecentActivity(user, mainAccount, now, transactions);
+            alignMainBalance(user, mainAccount, now, transactions);
 
             ScheduledPayment rentPayment = scheduledPaymentRepository.save(
                     new ScheduledPayment(
@@ -111,14 +78,14 @@ public class DataSeederConfig {
                             PaymentStatus.SCHEDULED
                     )
             );
-            transactions.add(transaction(user, mainAccount, rentPayment, "Автоплатеж: Аренда", "Landlord", "-25000.00", "Аренда", "home", TransactionType.AUTO_PAYMENT, TransactionStatus.SCHEDULED, rentPayment.getDueDate().atTime(9, 0)));
+            transactions.add(scheduledTransaction(user, mainAccount, rentPayment));
 
             ScheduledPayment utilitiesPayment = scheduledPaymentRepository.save(
                     new ScheduledPayment(
                             user,
                             mainAccount,
                             "Коммунальные",
-                            "BishkekEnergo",
+                            "БишкекЭнерго",
                             new BigDecimal("7800.00"),
                             "Коммунальные",
                             "home",
@@ -127,7 +94,7 @@ public class DataSeederConfig {
                             PaymentStatus.SCHEDULED
                     )
             );
-            transactions.add(transaction(user, mainAccount, utilitiesPayment, "Автоплатеж: Коммунальные", "BishkekEnergo", "-7800.00", "Коммунальные", "home", TransactionType.AUTO_PAYMENT, TransactionStatus.SCHEDULED, utilitiesPayment.getDueDate().atTime(10, 30)));
+            transactions.add(scheduledTransaction(user, mainAccount, utilitiesPayment));
 
             ScheduledPayment internetPayment = scheduledPaymentRepository.save(
                     new ScheduledPayment(
@@ -143,10 +110,229 @@ public class DataSeederConfig {
                             PaymentStatus.SCHEDULED
                     )
             );
-            transactions.add(transaction(user, mainAccount, internetPayment, "Автоплатеж: Интернет", "HomeNet", "-3900.00", "Подписки", "subscription", TransactionType.AUTO_PAYMENT, TransactionStatus.SCHEDULED, internetPayment.getDueDate().atTime(11, 15)));
+            transactions.add(scheduledTransaction(user, mainAccount, internetPayment));
 
             transactionRepository.saveAll(transactions);
+
+            BigDecimal completedNet = transactions.stream()
+                    .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
+                    .map(Transaction::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            mainAccount.setBalance(MAIN_START_CAPITAL.add(completedNet).setScale(2, RoundingMode.HALF_UP));
+            accountRepository.save(mainAccount);
         };
+    }
+
+    private void seedIncomeTransactions(User user,
+                                        Account mainAccount,
+                                        LocalDateTime now,
+                                        List<Transaction> transactions) {
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Зарплата", "Tech Corp",
+                new BigDecimal("39000.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                salaryMoment(now.minusMonths(2))
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Зарплата", "Tech Corp",
+                new BigDecimal("40500.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                salaryMoment(now.minusMonths(1))
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Фриланс", "Nova Studio",
+                new BigDecimal("4500.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusDays(12).withHour(14).withMinute(10)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Возврат", "O! Store",
+                new BigDecimal("1250.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusDays(19).withHour(11).withMinute(45)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Кэшбэк", "MBank bonus",
+                new BigDecimal("2400.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusDays(3).withHour(9).withMinute(25)
+        ));
+    }
+
+    private void seedExpenseTransactions(User user,
+                                         Account mainAccount,
+                                         LocalDateTime now,
+                                         Random random,
+                                         List<Transaction> transactions) {
+        List<TransactionSeed> weekdayPool = List.of(
+                new TransactionSeed("Яндекс.Такси", "Яндекс Go", "Транспорт", "transport", TransactionType.PURCHASE, 180, 1450),
+                new TransactionSeed("Супермаркет", "Пятерочка", "Еда", "food", TransactionType.PURCHASE, 450, 4200),
+                new TransactionSeed("Аптека", "Аптека 312", "Здоровье", "health", TransactionType.PURCHASE, 250, 2400),
+                new TransactionSeed("Обед", "VTS GTS Canteen", "Еда", "food", TransactionType.PURCHASE, 120, 850),
+                new TransactionSeed("Оплата по QR", "Тулпар", "Транспорт", "qr", TransactionType.QR_TRANSFER, 17, 120),
+                new TransactionSeed("Мобильная связь", "O!", "Подписки", "subscription", TransactionType.PURCHASE, 320, 1400),
+                new TransactionSeed("Перевод", "Aigerim", "Переводы", "transfer", TransactionType.TRANSFER, 800, 6500),
+                new TransactionSeed("Маркетплейс", "Wildberries", "Покупки", "shopping", TransactionType.PURCHASE, 1900, 14500)
+        );
+        List<TransactionSeed> weekendPool = List.of(
+                new TransactionSeed("Ресторан", "Navat", "Рестораны", "food", TransactionType.PURCHASE, 1200, 7200),
+                new TransactionSeed("Кино", "Manas Cinema", "Развлечения", "entertainment", TransactionType.PURCHASE, 900, 2800),
+                new TransactionSeed("АЗС", "Газпромнефть", "Транспорт", "transport", TransactionType.PURCHASE, 3200, 9500),
+                new TransactionSeed("Маркетплейс", "Kaspi Shop", "Покупки", "shopping", TransactionType.PURCHASE, 2500, 17000),
+                new TransactionSeed("Кофейня", "Coffee Room", "Еда", "food", TransactionType.PURCHASE, 180, 1300)
+        );
+
+        LocalDate startDate = now.toLocalDate().minusDays(84);
+        LocalDate endDate = now.toLocalDate().minusDays(5);
+
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            if (random.nextDouble() < 0.42) {
+                transactions.add(randomExpense(user, mainAccount, date, weekdayPool, weekendPool, random));
+            }
+            if (random.nextDouble() < 0.16) {
+                transactions.add(randomExpense(user, mainAccount, date, weekdayPool, weekendPool, random));
+            }
+        }
+    }
+
+    private void seedRecentActivity(User user,
+                                    Account mainAccount,
+                                    LocalDateTime now,
+                                    List<Transaction> transactions) {
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Покупка", "VTS GTS*CANTIN STOLOVAYA, BISHKEK",
+                new BigDecimal("-135.00"),
+                "Еда", "food",
+                TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                now.minusDays(1).withHour(12).withMinute(36)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Оплата по QR", "Тулпар",
+                new BigDecimal("-17.00"),
+                "Транспорт", "qr",
+                TransactionType.QR_TRANSFER, TransactionStatus.COMPLETED,
+                now.minusDays(1).withHour(17).withMinute(23)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Покупка", "Минимаркет у дома",
+                new BigDecimal("-63.00"),
+                "Еда", "food",
+                TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                now.minusHours(7)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Перевод", "Visa *4451",
+                new BigDecimal("-500.00"),
+                "Переводы", "transfer",
+                TransactionType.TRANSFER, TransactionStatus.COMPLETED,
+                now.minusHours(3)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Возврат", "Корректировка платежа",
+                new BigDecimal("630.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusDays(6).withHour(22).withMinute(47)
+        ));
+    }
+
+    private void alignMainBalance(User user,
+                                  Account mainAccount,
+                                  LocalDateTime now,
+                                  List<Transaction> transactions) {
+        BigDecimal completedNet = transactions.stream()
+                .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal currentBalance = MAIN_START_CAPITAL.add(completedNet);
+        BigDecimal delta = TARGET_MAIN_BALANCE.subtract(currentBalance);
+        if (delta.signum() == 0) {
+            return;
+        }
+
+        transactions.add(transaction(
+                user,
+                mainAccount,
+                null,
+                delta.signum() > 0 ? "Возврат после сверки" : "Покупка техники",
+                delta.signum() > 0 ? "MBank Support" : "Technodom",
+                delta,
+                delta.signum() > 0 ? "Поступления" : "Покупки",
+                delta.signum() > 0 ? "income" : "shopping",
+                delta.signum() > 0 ? TransactionType.INCOME : TransactionType.PURCHASE,
+                TransactionStatus.COMPLETED,
+                now.minusHours(2)
+        ));
+    }
+
+    private Transaction randomExpense(User user,
+                                      Account mainAccount,
+                                      LocalDate date,
+                                      List<TransactionSeed> weekdayPool,
+                                      List<TransactionSeed> weekendPool,
+                                      Random random) {
+        List<TransactionSeed> pool = switch (date.getDayOfWeek()) {
+            case SATURDAY, SUNDAY -> weekendPool;
+            default -> weekdayPool;
+        };
+        TransactionSeed seed = pool.get(random.nextInt(pool.size()));
+        int amount = seed.minAmount + random.nextInt(seed.maxAmount - seed.minAmount + 1);
+        LocalDateTime occurredAt = date.atTime(8 + random.nextInt(13), random.nextInt(60));
+
+        return transaction(
+                user,
+                mainAccount,
+                null,
+                seed.title,
+                seed.counterparty,
+                BigDecimal.valueOf(amount).negate(),
+                seed.category,
+                seed.iconKey,
+                seed.type,
+                TransactionStatus.COMPLETED,
+                occurredAt
+        );
+    }
+
+    private LocalDateTime salaryMoment(LocalDateTime monthAnchor) {
+        LocalDate salaryDate = monthAnchor.toLocalDate().withDayOfMonth(15);
+        if (salaryDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            salaryDate = salaryDate.minusDays(1);
+        } else if (salaryDate.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            salaryDate = salaryDate.minusDays(2);
+        }
+        return salaryDate.atTime(9, 0);
+    }
+
+    private Transaction scheduledTransaction(User user, Account account, ScheduledPayment payment) {
+        return transaction(
+                user,
+                account,
+                payment,
+                "Автоплатеж: " + payment.getTitle(),
+                payment.getCounterparty(),
+                payment.getAmount().negate(),
+                payment.getCategory(),
+                payment.getIconKey(),
+                TransactionType.AUTO_PAYMENT,
+                TransactionStatus.SCHEDULED,
+                payment.getDueDate().atTime(9, 0)
+        );
     }
 
     private Transaction transaction(User user,
@@ -154,7 +340,7 @@ public class DataSeederConfig {
                                     ScheduledPayment scheduledPayment,
                                     String title,
                                     String counterparty,
-                                    String amount,
+                                    BigDecimal amount,
                                     String category,
                                     String iconKey,
                                     TransactionType type,
@@ -166,12 +352,21 @@ public class DataSeederConfig {
                 scheduledPayment,
                 title,
                 counterparty,
-                new BigDecimal(amount),
+                amount.setScale(2, RoundingMode.HALF_UP),
                 category,
                 iconKey,
                 type,
                 status,
                 occurredAt
         );
+    }
+
+    private record TransactionSeed(String title,
+                                   String counterparty,
+                                   String category,
+                                   String iconKey,
+                                   TransactionType type,
+                                   int minAmount,
+                                   int maxAmount) {
     }
 }

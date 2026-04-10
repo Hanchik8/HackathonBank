@@ -33,9 +33,9 @@ public class OpenRouterAiChatClient implements AiChatClient {
 
     public OpenRouterAiChatClient(AiCallExecutor aiCallExecutor,
                                   ObjectMapper objectMapper,
-                                  @Value("${ai.api-url:https://openrouter.ai/api/v1/chat/completions}") String apiUrl,
+                                  @Value("${ai.api-url:https://api.x.ai/v1/chat/completions}") String apiUrl,
                                   @Value("${ai.api-key:}") String apiKey,
-                                  @Value("${ai.model:google/gemini-2.0-flash-001}") String model,
+                                  @Value("${ai.model:grok-4}") String model,
                                   @Value("${ai.http-referer:http://localhost:8080}") String httpReferer,
                                   @Value("${ai.app-title:HackathonBank}") String appTitle) {
         this.aiCallExecutor = aiCallExecutor;

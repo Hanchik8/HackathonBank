@@ -30,6 +30,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
 
     Optional<Transaction> findByScheduledPaymentId(Long scheduledPaymentId);
 
+    Optional<Transaction> findByIdAndUserId(Long id, Long userId);
+
     @Query("""
             select t.smartCategory.id as smartCategoryId,
                    coalesce(sum(abs(t.amount)), 0) as spent

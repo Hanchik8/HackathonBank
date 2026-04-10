@@ -175,4 +175,10 @@ class BankApiDashboardRepository implements DashboardRepository {
   @override
   Future<void> cancelSubscription(String subscriptionId) =>
       _apiService.cancelSubscription(subscriptionId);
+
+  @override
+  Future<List<ForecastPointModel>> fetchForecastPoints(int days) async {
+    final dashboard = await _apiService.fetchDashboard(days);
+    return dashboard.points;
+  }
 }

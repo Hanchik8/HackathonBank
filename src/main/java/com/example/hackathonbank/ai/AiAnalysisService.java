@@ -10,26 +10,24 @@ import com.example.hackathonbank.model.Account;
 import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.ScheduledPayment;
 import com.example.hackathonbank.model.Transaction;
-import com.example.hackathonbank.model.TransactionStatus;
 import com.example.hackathonbank.service.AccountService;
 import com.example.hackathonbank.service.ForecastService;
 import com.example.hackathonbank.service.ScheduledPaymentService;
 import com.example.hackathonbank.service.TransactionService;
+import com.example.hackathonbank.service.IncomeCalendarService;
+import com.example.hackathonbank.service.UserContextService;
 import com.example.hackathonbank.service.UserSettingsService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -45,6 +43,8 @@ public class AiAnalysisService {
     private final AccountService accountService;
     private final BankingAgentTools bankingAgentTools;
     private final UserSettingsService userSettingsService;
+    private final IncomeCalendarService incomeCalendarService;
+    private final UserContextService userContextService;
 
     public AiAnalysisService(ForecastService forecastService,
                              TransactionService transactionService,
@@ -52,7 +52,9 @@ public class AiAnalysisService {
                              TransactionEnrichmentService transactionEnrichmentService,
                              AccountService accountService,
                              BankingAgentTools bankingAgentTools,
-                             UserSettingsService userSettingsService) {
+                             UserSettingsService userSettingsService,
+                             IncomeCalendarService incomeCalendarService,
+                             UserContextService userContextService) {
         this.forecastService = forecastService;
         this.transactionService = transactionService;
         this.scheduledPaymentService = scheduledPaymentService;
@@ -60,6 +62,8 @@ public class AiAnalysisService {
         this.accountService = accountService;
         this.bankingAgentTools = bankingAgentTools;
         this.userSettingsService = userSettingsService;
+        this.incomeCalendarService = incomeCalendarService;
+        this.userContextService = userContextService;
     }
 
     @Transactional(readOnly = true)
@@ -200,7 +204,7 @@ public class AiAnalysisService {
 
     private List<ScheduledPayment> collectFlexiblePayments(int horizonDays) {
         return paymentsInHorizon(horizonDays).stream()
-                .filter(this::isFlexiblePayment)
+                .filter(ScheduledPayment::isFlexible)
                 .sorted(Comparator.comparing(ScheduledPayment::getDueDate)
                         .thenComparing(ScheduledPayment::getAmount, Comparator.reverseOrder()))
                 .toList();
@@ -210,6 +214,7 @@ public class AiAnalysisService {
         LocalDate currentDate = userSettingsService.currentDate();
         LocalDate horizonDate = currentDate.plusDays(Math.max(0, horizonDays));
         return scheduledPaymentService.getPendingPayments().stream()
+                .filter(payment -> payment.getAccount().getType() == AccountType.MAIN)
                 .filter(payment -> !payment.getDueDate().isBefore(currentDate))
                 .filter(payment -> !payment.getDueDate().isAfter(horizonDate))
                 .sorted(Comparator.comparing(ScheduledPayment::getDueDate)
@@ -323,6 +328,40 @@ public class AiAnalysisService {
     }
 
     private List<ScheduledPayment> pickPaymentsForCoverage(List<ScheduledPayment> payments, BigDecimal requiredAmount) {
+        if (payments.size() <= 15) {
+            return optimalSubsetCoverage(payments, requiredAmount);
+        }
+        return greedyCoverage(payments, requiredAmount);
+    }
+
+    private List<ScheduledPayment> optimalSubsetCoverage(List<ScheduledPayment> payments, BigDecimal requiredAmount) {
+        List<ScheduledPayment> bestSubset = null;
+        int bestSize = Integer.MAX_VALUE;
+        BigDecimal bestTotal = null;
+
+        int n = payments.size();
+        for (int mask = 1; mask < (1 << n); mask++) {
+            List<ScheduledPayment> subset = new ArrayList<>();
+            BigDecimal total = BigDecimal.ZERO;
+            for (int bit = 0; bit < n; bit++) {
+                if ((mask & (1 << bit)) != 0) {
+                    subset.add(payments.get(bit));
+                    total = total.add(payments.get(bit).getAmount());
+                }
+            }
+            if (total.compareTo(requiredAmount) < 0) {
+                continue;
+            }
+            if (subset.size() < bestSize || (subset.size() == bestSize && (bestTotal == null || total.compareTo(bestTotal) < 0))) {
+                bestSubset = subset;
+                bestSize = subset.size();
+                bestTotal = total;
+            }
+        }
+        return bestSubset != null ? bestSubset : greedyCoverage(payments, requiredAmount);
+    }
+
+    private List<ScheduledPayment> greedyCoverage(List<ScheduledPayment> payments, BigDecimal requiredAmount) {
         List<ScheduledPayment> selected = new ArrayList<>();
         BigDecimal covered = BigDecimal.ZERO;
         for (ScheduledPayment payment : payments) {
@@ -336,68 +375,17 @@ public class AiAnalysisService {
     }
 
     private LocalDate inferRecommendedPostponeDate(LocalDate afterDate) {
-        LocalDate predicted = predictNextIncomeDate(afterDate);
-        if (predicted != null && predicted.isAfter(afterDate)) {
-            return predicted;
-        }
-        return afterDate.plusDays(7);
-    }
-
-    private LocalDate predictNextIncomeDate(LocalDate afterDate) {
-        LocalDate currentDate = userSettingsService.currentDate();
-        LocalDateTime periodStart = currentDate.minusDays(90).atStartOfDay();
-        LocalDateTime periodEnd = currentDate.atTime(23, 59, 59);
-        List<Transaction> incomes = transactionService.getTransactionsForCurrentUser().stream()
-                .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
-                .filter(transaction -> transaction.getAmount().compareTo(BigDecimal.ZERO) > 0)
-                .filter(transaction -> !transaction.getOccurredAt().isBefore(periodStart))
-                .filter(transaction -> !transaction.getOccurredAt().isAfter(periodEnd))
-                .sorted(Comparator.comparing(Transaction::getOccurredAt))
-                .toList();
-        if (incomes.isEmpty()) {
-            return null;
-        }
-
-        Map<Integer, IncomePattern> byDay = new LinkedHashMap<>();
-        for (Transaction income : incomes) {
-            int day = income.getOccurredAt().getDayOfMonth();
-            IncomePattern current = byDay.get(day);
-            byDay.put(day, current == null
-                    ? new IncomePattern(day, 1, income.getAmount())
-                    : new IncomePattern(day, current.occurrences() + 1, current.totalAmount().add(income.getAmount())));
-        }
-
-        LocalDate bestCandidate = byDay.values().stream()
-                .filter(pattern -> pattern.occurrences() >= 2)
-                .sorted(Comparator.comparing(IncomePattern::occurrences).reversed()
-                        .thenComparing(IncomePattern::totalAmount, Comparator.reverseOrder()))
-                .map(pattern -> nextOccurrence(afterDate, pattern.dayOfMonth()))
-                .filter(candidate -> candidate.isAfter(afterDate))
-                .min(LocalDate::compareTo)
-                .orElse(null);
-        if (bestCandidate != null) {
-            return bestCandidate;
-        }
-
-        if (incomes.size() >= 2) {
-            long totalInterval = 0;
-            for (int index = 1; index < incomes.size(); index++) {
-                totalInterval += Duration.between(
-                        incomes.get(index - 1).getOccurredAt(),
-                        incomes.get(index).getOccurredAt()
-                ).toDays();
-            }
-            long averageInterval = Math.round((double) totalInterval / (incomes.size() - 1));
-            if (averageInterval > 0) {
-                LocalDate candidate = incomes.get(incomes.size() - 1).getOccurredAt().toLocalDate();
-                while (!candidate.isAfter(afterDate)) {
-                    candidate = candidate.plusDays(averageInterval);
-                }
+        Long userId = userContextService.getCurrentUser().getId();
+        IncomeCalendarService.IncomeCalendar calendar = incomeCalendarService.buildCalendar(userId, afterDate);
+        if (calendar.confidencePercent() >= 50) {
+            LocalDate candidate = calendar.rangeEnd().isAfter(afterDate)
+                    ? calendar.rangeEnd()
+                    : calendar.nextExpectedDate();
+            if (candidate.isAfter(afterDate)) {
                 return candidate;
             }
         }
-
-        return null;
+        return afterDate.plusDays(7);
     }
 
     private ActionExecutionResult executeActionToken(String actionToken) {
@@ -490,39 +478,6 @@ public class AiAnalysisService {
                 .orElse(userSettingsService.currentDate());
     }
 
-    private LocalDate nextOccurrence(LocalDate after, int dayOfMonth) {
-        LocalDate monthStart = after.withDayOfMonth(1);
-        List<LocalDate> candidates = List.of(
-                safeDate(monthStart.getYear(), monthStart.getMonthValue(), dayOfMonth),
-                safeDate(monthStart.plusMonths(1).getYear(), monthStart.plusMonths(1).getMonthValue(), dayOfMonth),
-                safeDate(monthStart.plusMonths(2).getYear(), monthStart.plusMonths(2).getMonthValue(), dayOfMonth)
-        );
-        return candidates.stream()
-                .filter(candidate -> candidate.isAfter(after))
-                .findFirst()
-                .orElse(candidates.get(candidates.size() - 1));
-    }
-
-    private LocalDate safeDate(int year, int month, int dayOfMonth) {
-        LocalDate monthStart = LocalDate.of(year, month, 1);
-        int safeDay = Math.min(dayOfMonth, monthStart.lengthOfMonth());
-        return LocalDate.of(year, month, safeDay);
-    }
-
-    private boolean isFlexiblePayment(ScheduledPayment payment) {
-        String normalized = (payment.getTitle() + " " + payment.getCategory()).toLowerCase(Locale.ROOT);
-        return !containsAny(normalized, "аренд", "коммун", "кредит", "налог", "штраф");
-    }
-
-    private boolean containsAny(String value, String... candidates) {
-        for (String candidate : candidates) {
-            if (value.contains(candidate)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private String normalizeReasoning(EnrichmentSummary enrichmentSummary) {
         if (enrichmentSummary == null || enrichmentSummary.reasoning() == null || enrichmentSummary.reasoning().isBlank()) {
             return "Регулярные расходы и запланированные списания создают риск кассового разрыва.";
@@ -551,7 +506,5 @@ public class AiAnalysisService {
         });
     }
 
-    private record IncomePattern(int dayOfMonth, int occurrences, BigDecimal totalAmount) {
-    }
 }
 

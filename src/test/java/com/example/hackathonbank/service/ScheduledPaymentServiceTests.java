@@ -98,6 +98,65 @@ class ScheduledPaymentServiceTests {
     }
 
     @Test
+    void createScheduledPaymentRespectsExplicitFlexibleFalse() {
+        User user = new User("Azizkhan");
+        ReflectionTestUtils.setField(user, "id", 1L);
+        Account main = new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS");
+        ReflectionTestUtils.setField(main, "id", 1L);
+
+        when(userContextService.getCurrentUser()).thenReturn(user);
+        when(accountService.getOwnedAccount(1L)).thenReturn(main);
+        when(scheduledPaymentRepository.save(any(ScheduledPayment.class))).thenAnswer(invocation -> {
+            ScheduledPayment p = invocation.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", 56L);
+            return p;
+        });
+
+        ScheduledPaymentResponse response = scheduledPaymentService.createScheduledPayment(
+                new ScheduledPaymentRequest(
+                        1L,
+                        "Кафе",
+                        "Starbucks",
+                        "Еда",
+                        new BigDecimal("1500.00"),
+                        LocalDate.now().plusDays(3),
+                        true,
+                        false
+                )
+        );
+
+        assertThat(response.flexible()).isFalse();
+    }
+
+    @Test
+    void createScheduledPaymentUsesAutoClassifyWhenFlexibleNull() {
+        User user = new User("Azizkhan");
+        ReflectionTestUtils.setField(user, "id", 1L);
+        Account main = new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS");
+        ReflectionTestUtils.setField(main, "id", 1L);
+
+        when(userContextService.getCurrentUser()).thenReturn(user);
+        when(accountService.getOwnedAccount(1L)).thenReturn(main);
+        when(scheduledPaymentRepository.save(any(ScheduledPayment.class))).thenAnswer(invocation -> {
+            ScheduledPayment p = invocation.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", 57L);
+            return p;
+        });
+
+        ScheduledPaymentResponse rentResponse = scheduledPaymentService.createScheduledPayment(
+                new ScheduledPaymentRequest(1L, "Аренда квартиры", null, "Аренда",
+                        new BigDecimal("25000.00"), LocalDate.now().plusDays(5))
+        );
+        assertThat(rentResponse.flexible()).isFalse();
+
+        ScheduledPaymentResponse cafeResponse = scheduledPaymentService.createScheduledPayment(
+                new ScheduledPaymentRequest(1L, "Кафе", null, "Еда",
+                        new BigDecimal("1500.00"), LocalDate.now().plusDays(5))
+        );
+        assertThat(cafeResponse.flexible()).isTrue();
+    }
+
+    @Test
     void postponePaymentMovesDueDateAndScheduledTransaction() {
         User user = new User("Azizkhan");
         ReflectionTestUtils.setField(user, "id", 1L);
