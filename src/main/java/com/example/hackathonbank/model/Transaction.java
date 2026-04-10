@@ -1,5 +1,7 @@
 package com.example.hackathonbank.model;
 
+import com.example.hackathonbank.service.IncomeType;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,6 +49,9 @@ public class Transaction {
     @Column(nullable = false)
     private String counterparty;
 
+    @Column(nullable = false)
+    private String normalizedCounterparty;
+
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal amount;
 
@@ -63,6 +68,14 @@ public class Transaction {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TransactionStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private IncomeType incomeType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SpendEssentiality essentiality;
 
     @Column(nullable = false)
     private LocalDateTime occurredAt;
@@ -102,11 +115,14 @@ public class Transaction {
         this.smartCategory = smartCategory;
         this.title = title;
         this.counterparty = counterparty;
+        this.normalizedCounterparty = normalizeCounterparty(counterparty, title);
         this.amount = amount;
         this.category = category;
         this.iconKey = iconKey;
         this.type = type;
         this.status = status;
+        this.incomeType = classifyIncomeType(title, category, counterparty, type, amount);
+        this.essentiality = classifyEssentiality(title, category, counterparty, type, amount);
         this.occurredAt = occurredAt;
     }
 
@@ -138,6 +154,10 @@ public class Transaction {
         return counterparty;
     }
 
+    public String getNormalizedCounterparty() {
+        return normalizedCounterparty;
+    }
+
     public BigDecimal getAmount() {
         return amount;
     }
@@ -158,6 +178,14 @@ public class Transaction {
         return status;
     }
 
+    public IncomeType getIncomeType() {
+        return incomeType;
+    }
+
+    public SpendEssentiality getEssentiality() {
+        return essentiality;
+    }
+
     public LocalDateTime getOccurredAt() {
         return occurredAt;
     }
@@ -169,5 +197,75 @@ public class Transaction {
     public void reschedule(LocalDate newDate) {
         this.occurredAt = newDate.atTime(9, 0);
         this.status = TransactionStatus.POSTPONED;
+    }
+
+    private static String normalizeCounterparty(String counterparty, String title) {
+        String source = counterparty != null && !counterparty.isBlank() ? counterparty : title;
+        if (source == null || source.isBlank()) {
+            return "unknown";
+        }
+        String normalized = source
+                .toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^\\p{IsAlphabetic}\\p{IsDigit}]+", " ")
+                .trim()
+                .replaceAll("\\s{2,}", " ");
+        return normalized.isBlank() ? "unknown" : normalized;
+    }
+
+    private static IncomeType classifyIncomeType(String title,
+                                                 String category,
+                                                 String counterparty,
+                                                 TransactionType type,
+                                                 BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) <= 0 || type == TransactionType.TRANSFER) {
+            return IncomeType.OTHER;
+        }
+        String normalized = normalizeCounterparty(counterparty, title) + " " + safe(category);
+        if (containsAny(normalized, "возврат", "кэшбэк", "cashback", "refund", "bonus", "бонус")) {
+            return IncomeType.REFUND;
+        }
+        if (containsAny(normalized, "пополнение", "top up", "topup", "deposit", "внесен", "терминал")) {
+            return IncomeType.TOPUP;
+        }
+        if (containsAny(normalized, "зарплат", "salary", "оклад", "аванс") || amount.compareTo(new BigDecimal("30000.00")) >= 0) {
+            return IncomeType.SALARY;
+        }
+        if (amount.compareTo(new BigDecimal("5000.00")) >= 0) {
+            return IncomeType.FREELANCE;
+        }
+        return IncomeType.OTHER;
+    }
+
+    private static SpendEssentiality classifyEssentiality(String title,
+                                                          String category,
+                                                          String counterparty,
+                                                          TransactionType type,
+                                                          BigDecimal amount) {
+        if (amount.compareTo(BigDecimal.ZERO) >= 0 || type == TransactionType.TRANSFER) {
+            return SpendEssentiality.UNKNOWN;
+        }
+        String normalized = normalizeCounterparty(counterparty, title) + " " + safe(category);
+        if (containsAny(normalized,
+                "продукт", "еда", "food", "grocery", "супермаркет", "магазин",
+                "аптек", "здоров", "health",
+                "транспорт", "такси", "автобус", "метро", "бензин", "азс", "transport",
+                "аренд", "коммун", "жкх", "электр", "газ", "вода",
+                "мобиль", "связь", "интернет", "подпис")) {
+            return SpendEssentiality.ESSENTIAL;
+        }
+        return SpendEssentiality.DISCRETIONARY;
+    }
+
+    private static boolean containsAny(String value, String... candidates) {
+        for (String candidate : candidates) {
+            if (value.contains(candidate)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value.toLowerCase(java.util.Locale.ROOT);
     }
 }

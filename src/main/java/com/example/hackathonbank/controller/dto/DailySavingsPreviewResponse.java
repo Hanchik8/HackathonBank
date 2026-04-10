@@ -12,6 +12,12 @@ public record DailySavingsPreviewResponse(
         BigDecimal lifeBuffer,
         LocalDate nextIncomeDate,
         int daysToNextIncome,
-        String status
+        String status,
+        BigDecimal guardReserve,
+        BigDecimal projectedMinimumBalanceAfterTransfer,
+        boolean overdraftGuardTriggered,
+        int incomeConfidence,
+        BigDecimal expectedIncomeAmount,
+        String expectedIncomeType
 ) {
 }

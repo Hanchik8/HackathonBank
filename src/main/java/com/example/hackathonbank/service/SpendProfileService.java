@@ -1,5 +1,7 @@
 package com.example.hackathonbank.service;
 
+import com.example.hackathonbank.model.AccountType;
+import com.example.hackathonbank.model.SpendEssentiality;
 import com.example.hackathonbank.model.Transaction;
 import com.example.hackathonbank.model.TransactionStatus;
 import com.example.hackathonbank.repository.TransactionRepository;
@@ -15,6 +17,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,7 +33,13 @@ public class SpendProfileService {
     }
 
     public SpendProfile buildProfile(Long userId, LocalDate referenceDate) {
-        List<Transaction> expenses = loadExpenses(userId, referenceDate);
+        return buildProfile(userId, referenceDate, Set.of());
+    }
+
+    public SpendProfile buildProfile(Long userId, LocalDate referenceDate, Set<String> excludedRecurringKeys) {
+        List<Transaction> expenses = loadExpenses(userId, referenceDate).stream()
+                .filter(transaction -> !excludedRecurringKeys.contains(transaction.getNormalizedCounterparty()))
+                .toList();
         if (expenses.isEmpty()) {
             return SpendProfile.zero();
         }
@@ -38,70 +47,99 @@ public class SpendProfileService {
         BigDecimal totalEssential = BigDecimal.ZERO;
         BigDecimal totalDiscretionary = BigDecimal.ZERO;
 
-        for (Transaction t : expenses) {
-            BigDecimal absAmount = t.getAmount().abs();
-            if (isEssential(t)) {
-                totalEssential = totalEssential.add(absAmount);
+        for (Transaction transaction : expenses) {
+            BigDecimal absoluteAmount = transaction.getAmount().abs();
+            if (isEssential(transaction)) {
+                totalEssential = totalEssential.add(absoluteAmount);
             } else {
-                totalDiscretionary = totalDiscretionary.add(absAmount);
+                totalDiscretionary = totalDiscretionary.add(absoluteAmount);
             }
         }
 
         BigDecimal dailyEssential = totalEssential.divide(BigDecimal.valueOf(LOOKBACK_DAYS), 2, RoundingMode.HALF_UP);
         BigDecimal dailyDiscretionary = totalDiscretionary.divide(BigDecimal.valueOf(LOOKBACK_DAYS), 2, RoundingMode.HALF_UP);
 
-        Map<DayOfWeek, BigDecimal> weekdayMultipliers = computeWeekdayMultipliers(expenses, referenceDate);
+        Map<DayOfWeek, BigDecimal> essentialMultipliers = computeWeekdayMultipliers(
+                expenses.stream().filter(this::isEssential).toList(),
+                referenceDate
+        );
+        Map<DayOfWeek, BigDecimal> discretionaryMultipliers = computeWeekdayMultipliers(
+                expenses.stream().filter(transaction -> !isEssential(transaction)).toList(),
+                referenceDate
+        );
         BigDecimal volatility = computeVolatility(expenses, referenceDate);
 
-        return new SpendProfile(dailyEssential, dailyDiscretionary, weekdayMultipliers, volatility);
+        return new SpendProfile(
+                dailyEssential,
+                dailyDiscretionary,
+                essentialMultipliers,
+                discretionaryMultipliers,
+                volatility,
+                excludedRecurringKeys
+        );
     }
 
     private List<Transaction> loadExpenses(Long userId, LocalDate referenceDate) {
         LocalDateTime windowStart = referenceDate.minusDays(LOOKBACK_DAYS - 1L).atStartOfDay();
         LocalDateTime windowEnd = referenceDate.atTime(23, 59, 59);
-        return transactionRepository.findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
-                userId, TransactionStatus.COMPLETED, windowStart, windowEnd
+        return transactionRepository.findByUserIdAndAccountTypeAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
+                userId,
+                AccountType.MAIN,
+                TransactionStatus.COMPLETED,
+                windowStart,
+                windowEnd
         ).stream()
-                .filter(t -> t.getAmount().compareTo(BigDecimal.ZERO) < 0)
+                .filter(transaction -> transaction.getAmount().compareTo(BigDecimal.ZERO) < 0)
                 .toList();
     }
 
-    private boolean isEssential(Transaction t) {
-        String normalized = ((t.getTitle() != null ? t.getTitle() : "") + " "
-                + (t.getCategory() != null ? t.getCategory() : "")).toLowerCase(Locale.ROOT);
-        return containsAny(normalized,
+    private boolean isEssential(Transaction transaction) {
+        if (transaction.getEssentiality() == SpendEssentiality.ESSENTIAL) {
+            return true;
+        }
+        if (transaction.getEssentiality() == SpendEssentiality.DISCRETIONARY) {
+            return false;
+        }
+        String normalized = ((transaction.getTitle() != null ? transaction.getTitle() : "") + " "
+                + (transaction.getCategory() != null ? transaction.getCategory() : "")).toLowerCase(Locale.ROOT);
+        return containsAny(
+                normalized,
                 "продукт", "еда", "food", "grocery", "супермаркет", "магазин",
-                "аптек", "здоровь", "health",
+                "аптек", "здоров", "health",
                 "транспорт", "такси", "автобус", "метро", "бензин", "азс", "transport",
-                "аренд", "коммунал", "жкх", "электричеств",
-                "мобиль", "связь", "интернет", "подпис");
+                "аренд", "коммунал", "жкх", "электр", "газ", "вода",
+                "мобиль", "связь", "интернет", "подпис"
+        );
     }
 
     private Map<DayOfWeek, BigDecimal> computeWeekdayMultipliers(List<Transaction> expenses, LocalDate referenceDate) {
         Map<DayOfWeek, BigDecimal> dailyTotals = new EnumMap<>(DayOfWeek.class);
         Map<DayOfWeek, Integer> dayCounts = new EnumMap<>(DayOfWeek.class);
 
-        for (DayOfWeek dow : DayOfWeek.values()) {
-            dailyTotals.put(dow, BigDecimal.ZERO);
-            dayCounts.put(dow, 0);
+        for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+            dailyTotals.put(dayOfWeek, BigDecimal.ZERO);
+            dayCounts.put(dayOfWeek, 0);
         }
 
         LocalDate startDate = referenceDate.minusDays(LOOKBACK_DAYS - 1L);
-        for (LocalDate d = startDate; !d.isAfter(referenceDate); d = d.plusDays(1)) {
-            dayCounts.merge(d.getDayOfWeek(), 1, Integer::sum);
+        for (LocalDate date = startDate; !date.isAfter(referenceDate); date = date.plusDays(1)) {
+            dayCounts.merge(date.getDayOfWeek(), 1, Integer::sum);
         }
 
-        for (Transaction t : expenses) {
-            DayOfWeek dow = t.getOccurredAt().getDayOfWeek();
-            dailyTotals.merge(dow, t.getAmount().abs(), BigDecimal::add);
+        for (Transaction transaction : expenses) {
+            DayOfWeek dayOfWeek = transaction.getOccurredAt().getDayOfWeek();
+            dailyTotals.merge(dayOfWeek, transaction.getAmount().abs(), BigDecimal::add);
         }
 
         Map<DayOfWeek, BigDecimal> averageByDay = new EnumMap<>(DayOfWeek.class);
-        for (DayOfWeek dow : DayOfWeek.values()) {
-            int count = dayCounts.getOrDefault(dow, 1);
-            averageByDay.put(dow, count > 0
-                    ? dailyTotals.get(dow).divide(BigDecimal.valueOf(count), 4, RoundingMode.HALF_UP)
-                    : BigDecimal.ZERO);
+        for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+            int count = dayCounts.getOrDefault(dayOfWeek, 1);
+            averageByDay.put(
+                    dayOfWeek,
+                    count > 0
+                            ? dailyTotals.get(dayOfWeek).divide(BigDecimal.valueOf(count), 4, RoundingMode.HALF_UP)
+                            : BigDecimal.ZERO
+            );
         }
 
         BigDecimal overallAverage = averageByDay.values().stream()
@@ -109,12 +147,14 @@ public class SpendProfileService {
                 .divide(BigDecimal.valueOf(7), 4, RoundingMode.HALF_UP);
 
         Map<DayOfWeek, BigDecimal> multipliers = new EnumMap<>(DayOfWeek.class);
-        for (DayOfWeek dow : DayOfWeek.values()) {
+        for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
             if (overallAverage.compareTo(BigDecimal.ZERO) == 0) {
-                multipliers.put(dow, BigDecimal.ONE);
+                multipliers.put(dayOfWeek, BigDecimal.ONE);
             } else {
-                multipliers.put(dow, averageByDay.get(dow)
-                        .divide(overallAverage, 2, RoundingMode.HALF_UP));
+                multipliers.put(
+                        dayOfWeek,
+                        averageByDay.get(dayOfWeek).divide(overallAverage, 2, RoundingMode.HALF_UP)
+                );
             }
         }
         return multipliers;
@@ -123,14 +163,14 @@ public class SpendProfileService {
     private BigDecimal computeVolatility(List<Transaction> expenses, LocalDate referenceDate) {
         Map<LocalDate, BigDecimal> dailySpend = expenses.stream()
                 .collect(Collectors.groupingBy(
-                        t -> t.getOccurredAt().toLocalDate(),
-                        Collectors.reducing(BigDecimal.ZERO, t -> t.getAmount().abs(), BigDecimal::add)
+                        transaction -> transaction.getOccurredAt().toLocalDate(),
+                        Collectors.reducing(BigDecimal.ZERO, transaction -> transaction.getAmount().abs(), BigDecimal::add)
                 ));
 
         LocalDate startDate = referenceDate.minusDays(LOOKBACK_DAYS - 1L);
         List<BigDecimal> dailyValues = new java.util.ArrayList<>();
-        for (LocalDate d = startDate; !d.isAfter(referenceDate); d = d.plusDays(1)) {
-            dailyValues.add(dailySpend.getOrDefault(d, BigDecimal.ZERO));
+        for (LocalDate date = startDate; !date.isAfter(referenceDate); date = date.plusDays(1)) {
+            dailyValues.add(dailySpend.getOrDefault(date, BigDecimal.ZERO));
         }
 
         if (dailyValues.size() < 2) {
@@ -140,17 +180,15 @@ public class SpendProfileService {
         BigDecimal mean = dailyValues.stream()
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
                 .divide(BigDecimal.valueOf(dailyValues.size()), 4, RoundingMode.HALF_UP);
-
         if (mean.compareTo(BigDecimal.ZERO) == 0) {
             return BigDecimal.ZERO;
         }
 
         BigDecimal sumSquaredDiffs = dailyValues.stream()
-                .map(v -> v.subtract(mean).pow(2))
+                .map(value -> value.subtract(mean).pow(2))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal variance = sumSquaredDiffs.divide(BigDecimal.valueOf(dailyValues.size()), 4, RoundingMode.HALF_UP);
         BigDecimal stdDev = BigDecimal.valueOf(Math.sqrt(variance.doubleValue()));
-
         return stdDev.divide(mean, 2, RoundingMode.HALF_UP);
     }
 
@@ -166,24 +204,50 @@ public class SpendProfileService {
     public record SpendProfile(
             BigDecimal dailyEssentialSpend,
             BigDecimal dailyDiscretionarySpend,
-            Map<DayOfWeek, BigDecimal> weekdayMultipliers,
-            BigDecimal volatility
+            Map<DayOfWeek, BigDecimal> essentialWeekdayMultipliers,
+            Map<DayOfWeek, BigDecimal> discretionaryWeekdayMultipliers,
+            BigDecimal volatility,
+            Set<String> excludedRecurringKeys
     ) {
         public BigDecimal dailyTotal() {
             return dailyEssentialSpend.add(dailyDiscretionarySpend);
         }
 
         public BigDecimal projectedSpend(DayOfWeek dayOfWeek) {
-            BigDecimal multiplier = weekdayMultipliers.getOrDefault(dayOfWeek, BigDecimal.ONE);
-            return dailyTotal().multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+            return projectedEssentialSpend(dayOfWeek)
+                    .add(projectedDiscretionarySpend(dayOfWeek))
+                    .setScale(2, RoundingMode.HALF_UP);
+        }
+
+        public BigDecimal projectedEssentialSpend(DayOfWeek dayOfWeek) {
+            BigDecimal multiplier = essentialWeekdayMultipliers.getOrDefault(dayOfWeek, BigDecimal.ONE);
+            return dailyEssentialSpend.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        public BigDecimal projectedDiscretionarySpend(DayOfWeek dayOfWeek) {
+            BigDecimal multiplier = discretionaryWeekdayMultipliers.getOrDefault(dayOfWeek, BigDecimal.ONE);
+            return dailyDiscretionarySpend.multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        public Map<DayOfWeek, BigDecimal> weekdayMultipliers() {
+            Map<DayOfWeek, BigDecimal> merged = new EnumMap<>(DayOfWeek.class);
+            for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+                BigDecimal total = projectedSpend(dayOfWeek);
+                if (dailyTotal().compareTo(BigDecimal.ZERO) == 0) {
+                    merged.put(dayOfWeek, BigDecimal.ONE);
+                } else {
+                    merged.put(dayOfWeek, total.divide(dailyTotal(), 2, RoundingMode.HALF_UP));
+                }
+            }
+            return merged;
         }
 
         static SpendProfile zero() {
             Map<DayOfWeek, BigDecimal> ones = new EnumMap<>(DayOfWeek.class);
-            for (DayOfWeek dow : DayOfWeek.values()) {
-                ones.put(dow, BigDecimal.ONE);
+            for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+                ones.put(dayOfWeek, BigDecimal.ONE);
             }
-            return new SpendProfile(BigDecimal.ZERO, BigDecimal.ZERO, ones, BigDecimal.ZERO);
+            return new SpendProfile(BigDecimal.ZERO, BigDecimal.ZERO, ones, ones, BigDecimal.ZERO, Set.of());
         }
     }
 }

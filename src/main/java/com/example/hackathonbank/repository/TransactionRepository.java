@@ -1,6 +1,7 @@
 package com.example.hackathonbank.repository;
 
 import com.example.hackathonbank.model.Transaction;
+import com.example.hackathonbank.model.AccountType;
 import com.example.hackathonbank.model.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -25,6 +26,22 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                                                                      TransactionStatus status,
                                                                                      LocalDateTime windowStart,
                                                                                      LocalDateTime windowEnd);
+
+    @Query("""
+            select t from Transaction t
+            left join fetch t.account
+            left join fetch t.smartCategory
+            where t.user.id = :userId
+              and t.account.type = :accountType
+              and t.status = :status
+              and t.occurredAt between :windowStart and :windowEnd
+            order by t.occurredAt desc
+            """)
+    List<Transaction> findByUserIdAndAccountTypeAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(@Param("userId") Long userId,
+                                                                                                   @Param("accountType") AccountType accountType,
+                                                                                                   @Param("status") TransactionStatus status,
+                                                                                                   @Param("windowStart") LocalDateTime windowStart,
+                                                                                                   @Param("windowEnd") LocalDateTime windowEnd);
 
     List<Transaction> findByUserIdAndSmartCategoryId(Long userId, Long smartCategoryId);
 
