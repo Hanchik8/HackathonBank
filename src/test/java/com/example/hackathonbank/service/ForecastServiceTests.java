@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,22 +29,13 @@ import static org.mockito.Mockito.when;
 class ForecastServiceTests {
 
     @Mock
-    private AccountService accountService;
-
-    @Mock
-    private ScheduledPaymentService scheduledPaymentService;
+    private CashFlowProjectionService cashFlowProjectionService;
 
     @Mock
     private UserSettingsService userSettingsService;
 
     @Mock
     private UserContextService userContextService;
-
-    @Mock
-    private IncomeCalendarService incomeCalendarService;
-
-    @Mock
-    private SpendProfileService spendProfileService;
 
     @Mock
     private User currentUser;
@@ -53,17 +45,14 @@ class ForecastServiceTests {
     @BeforeEach
     void setUp() {
         forecastService = new ForecastService(
-                accountService,
-                scheduledPaymentService,
+                cashFlowProjectionService,
                 userSettingsService,
-                userContextService,
-                incomeCalendarService,
-                spendProfileService
+                userContextService
         );
     }
 
     @Test
-    void buildDashboardUsesRequestedHorizonAndProducesNonLinearForecast() {
+    void buildDashboardUsesUnifiedProjectionPoints() {
         LocalDate currentDate = LocalDate.of(2026, 3, 25);
         User user = new User("Azizkhan");
         Account main = new Account(user, AccountType.MAIN, "Main", new BigDecimal("15000.00"), "KGS");
@@ -72,54 +61,21 @@ class ForecastServiceTests {
                 user,
                 main,
                 "Аренда",
+                "Landlord",
                 new BigDecimal("25000.00"),
                 "Аренда",
+                "home",
                 currentDate.plusDays(4),
-                PaymentStatus.SCHEDULED
-        );
-
-        Map<DayOfWeek, BigDecimal> multipliers = new EnumMap<>(DayOfWeek.class);
-        for (DayOfWeek dow : DayOfWeek.values()) {
-            multipliers.put(dow, BigDecimal.ONE);
-        }
-        SpendProfileService.SpendProfile spendProfile = new SpendProfileService.SpendProfile(
-                new BigDecimal("80.00"),
-                new BigDecimal("40.00"),
-                multipliers,
-                BigDecimal.ZERO
-        );
-
-        IncomeCalendarService.IncomeCalendar incomeCalendar = new IncomeCalendarService.IncomeCalendar(
-                List.of(new IncomeCalendarService.IncomeCluster(
-                        IncomeType.SALARY,
-                        26,
-                        new BigDecimal("5000.00"),
-                        3,
-                        85.0
-                )),
-                currentDate.plusDays(7),
-                85,
-                currentDate.plusDays(5),
-                currentDate.plusDays(9)
+                true,
+                PaymentStatus.SCHEDULED,
+                false
         );
 
         when(userContextService.getCurrentUser()).thenReturn(currentUser);
         when(currentUser.getId()).thenReturn(99L);
-        when(accountService.getAccountByType(AccountType.MAIN)).thenReturn(main);
-        when(accountService.getAccountByType(AccountType.SAVINGS)).thenReturn(savings);
-        when(scheduledPaymentService.getPendingPayments()).thenReturn(List.of(rent));
         when(userSettingsService.currentDate()).thenReturn(currentDate);
-        when(incomeCalendarService.buildCalendar(eq(99L), eq(currentDate))).thenReturn(incomeCalendar);
-        when(incomeCalendarService.projectedIncomeEvents(eq(incomeCalendar), eq(currentDate.plusDays(1)), eq(currentDate.plusDays(42)), eq(50)))
-                .thenReturn(List.of(new IncomeCalendarService.ProjectedIncomeEvent(
-                        IncomeType.SALARY,
-                        currentDate.plusDays(1),
-                        currentDate.plusDays(1),
-                        currentDate.plusDays(3),
-                        new BigDecimal("5000.00"),
-                        85
-                )));
-        when(spendProfileService.buildProfile(eq(99L), eq(currentDate))).thenReturn(spendProfile);
+        when(cashFlowProjectionService.buildProjection(eq(99L), eq(currentDate), eq(42)))
+                .thenReturn(projection(user, main, savings, rent, currentDate, currentDate.plusDays(42)));
 
         AiDashboardResponse dashboard = forecastService.buildDashboard(42);
 
@@ -135,58 +91,91 @@ class ForecastServiceTests {
 
         assertThat(deltas).anyMatch(delta -> delta.signum() < 0);
         assertThat(deltas).anyMatch(delta -> delta.signum() > 0);
+        assertThat(dashboard.points().get(4).projectedExpense()).isEqualByComparingTo("25120.00");
     }
 
-    @Test
-    void incomeOnDay31AppearsInFebruaryForecast() {
-        LocalDate currentDate = LocalDate.of(2026, 2, 15);
-        User user = new User("TestUser");
-        Account main = new Account(user, AccountType.MAIN, "Main", new BigDecimal("10000.00"), "KGS");
-        Account savings = new Account(user, AccountType.SAVINGS, "Savings", new BigDecimal("5000.00"), "KGS");
-
+    private CashFlowProjectionService.CashFlowProjection projection(User user,
+                                                                    Account main,
+                                                                    Account savings,
+                                                                    ScheduledPayment rent,
+                                                                    LocalDate currentDate,
+                                                                    LocalDate horizonEnd) {
         Map<DayOfWeek, BigDecimal> multipliers = new EnumMap<>(DayOfWeek.class);
-        for (DayOfWeek dow : DayOfWeek.values()) {
-            multipliers.put(dow, BigDecimal.ONE);
+        for (DayOfWeek dayOfWeek : DayOfWeek.values()) {
+            multipliers.put(dayOfWeek, BigDecimal.ONE);
         }
         SpendProfileService.SpendProfile spendProfile = new SpendProfileService.SpendProfile(
-                new BigDecimal("50.00"), new BigDecimal("50.00"), multipliers, BigDecimal.ZERO
+                new BigDecimal("80.00"),
+                new BigDecimal("40.00"),
+                multipliers,
+                multipliers,
+                BigDecimal.ZERO,
+                Set.of()
         );
-        IncomeCalendarService.IncomeCalendar incomeCalendar = new IncomeCalendarService.IncomeCalendar(
-                List.of(new IncomeCalendarService.IncomeCluster(
-                        IncomeType.SALARY, 31, new BigDecimal("80000.00"), 3, 99.0
-                )),
-                LocalDate.of(2026, 2, 28), 99,
-                LocalDate.of(2026, 2, 27), LocalDate.of(2026, 3, 1)
-        );
-
-        when(userContextService.getCurrentUser()).thenReturn(currentUser);
-        when(currentUser.getId()).thenReturn(99L);
-        when(accountService.getAccountByType(AccountType.MAIN)).thenReturn(main);
-        when(accountService.getAccountByType(AccountType.SAVINGS)).thenReturn(savings);
-        when(scheduledPaymentService.getPendingPayments()).thenReturn(List.of());
-        when(userSettingsService.currentDate()).thenReturn(currentDate);
-        when(incomeCalendarService.buildCalendar(eq(99L), eq(currentDate))).thenReturn(incomeCalendar);
-        when(incomeCalendarService.projectedIncomeEvents(eq(incomeCalendar), eq(currentDate.plusDays(1)), eq(currentDate.plusDays(20)), eq(50)))
-                .thenReturn(List.of(new IncomeCalendarService.ProjectedIncomeEvent(
-                        IncomeType.SALARY,
-                        LocalDate.of(2026, 2, 28),
-                        LocalDate.of(2026, 2, 27),
-                        LocalDate.of(2026, 3, 1),
-                        new BigDecimal("80000.00"),
-                        99
-                )));
-        when(spendProfileService.buildProfile(eq(99L), eq(currentDate))).thenReturn(spendProfile);
-
-        AiDashboardResponse dashboard = forecastService.buildDashboard(20);
-
-        boolean incomeDetected = false;
-        for (int i = 1; i < dashboard.points().size(); i++) {
-            BigDecimal delta = dashboard.points().get(i).balance().subtract(dashboard.points().get(i - 1).balance());
-            if (delta.compareTo(new BigDecimal("70000")) > 0) {
-                incomeDetected = true;
-                break;
-            }
+        List<CashFlowProjectionService.ProjectedCashFlowDay> days = new ArrayList<>();
+        BigDecimal balance = main.getBalance();
+        days.add(new CashFlowProjectionService.ProjectedCashFlowDay(0, currentDate, balance, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
+        for (int offset = 1; offset <= 42; offset++) {
+            LocalDate date = currentDate.plusDays(offset);
+            BigDecimal income = offset == 10 ? new BigDecimal("5000.00") : BigDecimal.ZERO;
+            BigDecimal confirmed = offset == 4 ? rent.getAmount() : BigDecimal.ZERO;
+            BigDecimal essential = new BigDecimal("80.00");
+            BigDecimal discretionary = new BigDecimal("40.00");
+            balance = balance.subtract(essential).subtract(discretionary).subtract(confirmed).add(income);
+            days.add(new CashFlowProjectionService.ProjectedCashFlowDay(
+                    offset,
+                    date,
+                    balance,
+                    income,
+                    essential,
+                    discretionary,
+                    confirmed,
+                    BigDecimal.ZERO
+            ));
         }
-        assertThat(incomeDetected).as("Income on day 31 should appear normalized in February forecast").isTrue();
+
+        return new CashFlowProjectionService.CashFlowProjection(
+                currentDate,
+                horizonEnd,
+                main,
+                savings,
+                main.getBalance(),
+                new IncomeCalendarService.IncomeCalendar(
+                        List.of(new IncomeCalendarService.IncomeCluster(
+                                IncomeType.SALARY,
+                                "salary issuer",
+                                new BigDecimal("5000.00"),
+                                4,
+                                3,
+                                3,
+                                85
+                        )),
+                        new IncomeCalendarService.NextIncomeForecast(
+                                currentDate.plusDays(10),
+                                currentDate.plusDays(9),
+                                currentDate.plusDays(11),
+                                new BigDecimal("5000.00"),
+                                IncomeType.SALARY,
+                                85
+                        )
+                ),
+                List.of(new IncomeCalendarService.ProjectedIncomeEvent(
+                        IncomeType.SALARY,
+                        currentDate.plusDays(10),
+                        currentDate.plusDays(9),
+                        currentDate.plusDays(11),
+                        new BigDecimal("5000.00"),
+                        85
+                )),
+                spendProfile,
+                List.of(rent),
+                RecurringObligationService.RecurringObligationForecast.empty(),
+                days,
+                balance.min(new BigDecimal("-10600.00")),
+                currentDate.plusDays(4),
+                rent.getAmount(),
+                BigDecimal.ZERO,
+                new BigDecimal("5040.00")
+        );
     }
 }

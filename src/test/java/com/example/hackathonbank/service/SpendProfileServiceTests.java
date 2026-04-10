@@ -131,8 +131,9 @@ class SpendProfileServiceTests {
     }
 
     private void stubExpenses(List<Transaction> transactions) {
-        when(transactionRepository.findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
+        when(transactionRepository.findByUserIdAndAccountTypeAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
                 eq(USER_ID),
+                eq(AccountType.MAIN),
                 eq(TransactionStatus.COMPLETED),
                 any(LocalDateTime.class),
                 any(LocalDateTime.class)

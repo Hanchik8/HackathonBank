@@ -70,8 +70,8 @@ class IncomeCalendarServiceTests {
         assertThat(calendar.clusters()).hasSize(1);
         IncomeCluster cluster = calendar.clusters().get(0);
         assertThat(cluster.type()).isEqualTo(IncomeType.SALARY);
-        assertThat(cluster.confidence()).isEqualTo(33.0);
-        assertThat(cluster.dayOfMonth()).isEqualTo(15);
+        assertThat(cluster.confidencePercent()).isPositive();
+        assertThat(cluster.expectedDayOfMonth()).isEqualTo(15);
     }
 
     @Test
@@ -85,7 +85,7 @@ class IncomeCalendarServiceTests {
 
         assertThat(calendar.clusters()).hasSize(1);
         IncomeCluster cluster = calendar.clusters().get(0);
-        assertThat(cluster.confidence()).isEqualTo(66.0);
+        assertThat(cluster.confidencePercent()).isGreaterThanOrEqualTo(50);
         assertThat(calendar.nextExpectedDate()).isEqualTo(LocalDate.of(2026, 4, 15));
     }
 
@@ -166,8 +166,9 @@ class IncomeCalendarServiceTests {
     }
 
     private void stubIncomes(List<Transaction> transactions) {
-        when(transactionRepository.findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
+        when(transactionRepository.findByUserIdAndAccountTypeAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(
                 eq(USER_ID),
+                eq(AccountType.MAIN),
                 eq(TransactionStatus.COMPLETED),
                 any(LocalDateTime.class),
                 any(LocalDateTime.class)

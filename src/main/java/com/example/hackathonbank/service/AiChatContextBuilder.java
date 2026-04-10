@@ -132,17 +132,23 @@ public class AiChatContextBuilder {
         context.put("scheduledPayments", scheduledPayments.stream()
                 .map(this::toScheduledPaymentContext)
                 .toList());
-        context.put("dailySafeToSave", Map.of(
-                "enabled", dailySafeToSave.enabled(),
-                "suggestedAmount", dailySafeToSave.suggestedAmount(),
-                "safeBalance", dailySafeToSave.safeBalance(),
-                "currentBalance", dailySafeToSave.currentBalance(),
-                "requiredPayments", dailySafeToSave.requiredPayments(),
-                "lifeBuffer", dailySafeToSave.lifeBuffer(),
-                "nextIncomeDate", dailySafeToSave.nextIncomeDate(),
-                "daysToNextIncome", dailySafeToSave.daysToNextIncome(),
-                "status", dailySafeToSave.status()
-        ));
+        LinkedHashMap<String, Object> dailySafeToSaveContext = new LinkedHashMap<>();
+        dailySafeToSaveContext.put("enabled", dailySafeToSave.enabled());
+        dailySafeToSaveContext.put("suggestedAmount", dailySafeToSave.suggestedAmount());
+        dailySafeToSaveContext.put("safeBalance", dailySafeToSave.safeBalance());
+        dailySafeToSaveContext.put("currentBalance", dailySafeToSave.currentBalance());
+        dailySafeToSaveContext.put("requiredPayments", dailySafeToSave.requiredPayments());
+        dailySafeToSaveContext.put("lifeBuffer", dailySafeToSave.lifeBuffer());
+        dailySafeToSaveContext.put("nextIncomeDate", dailySafeToSave.nextIncomeDate());
+        dailySafeToSaveContext.put("daysToNextIncome", dailySafeToSave.daysToNextIncome());
+        dailySafeToSaveContext.put("guardReserve", dailySafeToSave.guardReserve());
+        dailySafeToSaveContext.put("projectedMinimumBalanceAfterTransfer", dailySafeToSave.projectedMinimumBalanceAfterTransfer());
+        dailySafeToSaveContext.put("overdraftGuardTriggered", dailySafeToSave.overdraftGuardTriggered());
+        dailySafeToSaveContext.put("incomeConfidence", dailySafeToSave.incomeConfidence());
+        dailySafeToSaveContext.put("expectedIncomeAmount", dailySafeToSave.expectedIncomeAmount());
+        dailySafeToSaveContext.put("expectedIncomeType", dailySafeToSave.expectedIncomeType());
+        dailySafeToSaveContext.put("status", dailySafeToSave.status());
+        context.put("dailySafeToSave", dailySafeToSaveContext);
         context.put("smartCategories", smartCategories.stream()
                 .map(category -> Map.of(
                         "id", category.id(),
@@ -153,15 +159,16 @@ public class AiChatContextBuilder {
                 ))
                 .toList());
 
-        context.put("derivedFeatures", buildDerivedFeatures(user.getId(), currentDate, transactions, accounts));
+        context.put("derivedFeatures", buildDerivedFeatures(user.getId(), currentDate, transactions, accounts, dailySafeToSave));
 
         return objectMapper.valueToTree(context);
     }
 
     private Map<String, Object> buildDerivedFeatures(Long userId,
-                                                      LocalDate currentDate,
-                                                      List<Transaction> transactions,
-                                                      List<AccountResponse> accounts) {
+                                                     LocalDate currentDate,
+                                                     List<Transaction> transactions,
+                                                     List<AccountResponse> accounts,
+                                                     DailySavingsPreviewResponse dailySafeToSave) {
         IncomeCalendarService.IncomeCalendar calendar = incomeCalendarService.buildCalendar(userId, currentDate);
         SpendProfileService.SpendProfile spendProfile = spendProfileService.buildProfile(userId, currentDate);
 
@@ -170,16 +177,19 @@ public class AiChatContextBuilder {
         features.put("incomeCalendar", calendar.clusters().stream()
                 .map(cluster -> Map.of(
                         "type", cluster.type().name(),
-                        "dayOfMonth", cluster.dayOfMonth(),
+                        "dayOfMonth", cluster.expectedDayOfMonth(),
                         "averageAmount", cluster.averageAmount(),
                         "occurrences", cluster.occurrences(),
-                        "confidence", cluster.confidence()
+                        "distinctMonths", cluster.distinctMonths(),
+                        "confidence", cluster.confidencePercent()
                 ))
                 .toList());
         features.put("nextIncomeDate", calendar.nextExpectedDate().toString());
         features.put("incomeConfidence", calendar.confidencePercent());
         features.put("incomeWindowStart", calendar.rangeStart().toString());
         features.put("incomeWindowEnd", calendar.rangeEnd().toString());
+        features.put("expectedIncomeAmount", calendar.nextIncomeForecast().expectedAmount());
+        features.put("expectedIncomeType", calendar.nextIncomeForecast().incomeType().name());
 
         features.put("burnRate", spendProfile.dailyTotal());
         features.put("burnRateEssential", spendProfile.dailyEssentialSpend());
@@ -200,17 +210,12 @@ public class AiChatContextBuilder {
         }
         features.put("daysToNegativeBalance", daysToNegative);
 
-        AccountResponse mainAccount = accounts.stream()
-                .filter(a -> "MAIN".equals(a.type()))
-                .findFirst()
-                .orElse(null);
-        if (mainAccount != null) {
-            var requiredPayments = dashboard.scheduledPayments().stream()
-                    .filter(payment -> payment.accountId().equals(mainAccount.id()))
-                    .map(com.example.hackathonbank.ai.dto.ScheduledPaymentSnapshot::amount)
-                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-            features.put("freeBalance", mainAccount.balance().subtract(requiredPayments));
-        }
+        features.put(
+                "freeBalance",
+                dailySafeToSave.currentBalance()
+                        .subtract(dailySafeToSave.requiredPayments())
+                        .subtract(dailySafeToSave.guardReserve())
+        );
 
         LinkedHashMap<String, Long> merchantCounts = new LinkedHashMap<>();
         transactions.stream()
