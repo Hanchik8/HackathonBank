@@ -13,6 +13,8 @@ public record TransactionResponse(
         String type,
         String status,
         String accountName,
-        LocalDateTime occurredAt
+        LocalDateTime occurredAt,
+        Long smartCategoryId,
+        String smartCategoryName
 ) {
 }

@@ -50,10 +50,36 @@ public class SmartCategoryService {
 
     @Transactional
     public SmartCategoryResponse createCategory(SmartCategoryCreateRequest request) {
-        SmartCategory category = smartCategoryRepository.save(
-                new SmartCategory(userContextService.getCurrentUser(), request.name().trim(), request.plannedMonthly(), false)
-        );
+        SmartCategory category = smartCategoryRepository.save(new SmartCategory(
+                userContextService.getCurrentUser(),
+                normalizeName(request.name()),
+                normalizePlannedMonthly(request.plannedMonthly()),
+                false
+        ));
         return toResponse(category, BigDecimal.ZERO);
+    }
+
+    @Transactional
+    public SmartCategoryResponse createCategory(String name, BigDecimal plannedMonthly) {
+        SmartCategory category = smartCategoryRepository.save(new SmartCategory(
+                userContextService.getCurrentUser(),
+                normalizeName(name),
+                normalizePlannedMonthly(plannedMonthly),
+                false
+        ));
+        return toResponse(category, BigDecimal.ZERO);
+    }
+
+    @Transactional
+    public SmartCategoryResponse updateCategoryLimit(Long categoryId, BigDecimal plannedMonthly) {
+        SmartCategory category = getOwnedCategory(categoryId);
+        category.setPlannedMonthly(normalizePlannedMonthly(plannedMonthly));
+        smartCategoryRepository.save(category);
+        BigDecimal spent = loadSpentByCategory(
+                userSettingsService.currentDate().withDayOfMonth(1).atStartOfDay(),
+                userSettingsService.currentDate().atTime(23, 59, 59)
+        ).getOrDefault(category.getId(), BigDecimal.ZERO);
+        return toResponse(category, spent);
     }
 
     @Transactional
@@ -119,6 +145,21 @@ public class SmartCategoryService {
                         projection -> projection.getSpent() == null ? BigDecimal.ZERO : projection.getSpent(),
                         BigDecimal::add
                 ));
+    }
+
+    private String normalizeName(String name) {
+        String normalized = name == null ? "" : name.trim();
+        if (normalized.isBlank()) {
+            throw new IllegalArgumentException("Название smart-категории не должно быть пустым.");
+        }
+        return normalized;
+    }
+
+    private BigDecimal normalizePlannedMonthly(BigDecimal plannedMonthly) {
+        if (plannedMonthly == null || plannedMonthly.compareTo(BigDecimal.ONE) < 0) {
+            throw new IllegalArgumentException("Лимит smart-категории должен быть не меньше 1 KGS.");
+        }
+        return plannedMonthly;
     }
 
 }

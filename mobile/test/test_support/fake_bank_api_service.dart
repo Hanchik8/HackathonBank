@@ -1,5 +1,6 @@
 import 'package:hackathon_bank_mobile/models/account_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_analysis_model.dart';
+import 'package:hackathon_bank_mobile/models/ai_chat_reply_model.dart';
 import 'package:hackathon_bank_mobile/models/ai_dashboard_model.dart';
 import 'package:hackathon_bank_mobile/models/daily_safe_to_save_model.dart';
 import 'package:hackathon_bank_mobile/models/simulate_day_response_model.dart';
@@ -59,10 +60,10 @@ List<TransactionModel> sampleTransactions() {
   return <TransactionModel>[
     TransactionModel(
       id: 1,
-      title: 'Продукты',
+      title: 'РџСЂРѕРґСѓРєС‚С‹',
       counterparty: 'Green Market',
       amount: -3200,
-      category: 'Еда',
+      category: 'Р•РґР°',
       iconKey: 'food',
       type: 'PURCHASE',
       status: 'COMPLETED',
@@ -71,10 +72,10 @@ List<TransactionModel> sampleTransactions() {
     ),
     TransactionModel(
       id: 2,
-      title: 'QR перевод',
+      title: 'QR РїРµСЂРµРІРѕРґ',
       counterparty: 'Aigerim',
       amount: -1800,
-      category: 'Переводы',
+      category: 'РџРµСЂРµРІРѕРґС‹',
       iconKey: 'qr',
       type: 'QR_TRANSFER',
       status: 'COMPLETED',
@@ -83,10 +84,10 @@ List<TransactionModel> sampleTransactions() {
     ),
     TransactionModel(
       id: 3,
-      title: 'Зарплата',
+      title: 'Р—Р°СЂРїР»Р°С‚Р°',
       counterparty: 'Tech Corp',
       amount: 23000,
-      category: 'Поступления',
+      category: 'РџРѕСЃС‚СѓРїР»РµРЅРёСЏ',
       iconKey: 'income',
       type: 'INCOME',
       status: 'COMPLETED',
@@ -103,9 +104,9 @@ List<ScheduledPaymentModel> sampleScheduledPayments() {
       id: 10,
       accountId: 1,
       accountName: 'Main',
-      title: 'Аренда',
+      title: 'РђСЂРµРЅРґР°',
       counterparty: 'Landlord',
-      category: 'Аренда',
+      category: 'РђСЂРµРЅРґР°',
       iconKey: 'home',
       amount: 25000,
       dueDate: today.add(const Duration(days: 4)),
@@ -116,9 +117,9 @@ List<ScheduledPaymentModel> sampleScheduledPayments() {
       id: 11,
       accountId: 1,
       accountName: 'Main',
-      title: 'Интернет',
+      title: 'РРЅС‚РµСЂРЅРµС‚',
       counterparty: 'HomeNet',
-      category: 'Подписки',
+      category: 'РџРѕРґРїРёСЃРєРё',
       iconKey: 'subscription',
       amount: 3900,
       dueDate: today.add(const Duration(days: 6)),
@@ -132,14 +133,14 @@ List<SmartCategory> sampleSmartCategories() {
   return const <SmartCategory>[
     SmartCategory(
       id: 'food',
-      name: 'Еда',
+      name: 'Р•РґР°',
       plannedMonthly: 12000,
       remaining: 8800,
       isFavorite: true,
     ),
     SmartCategory(
       id: 'transfer',
-      name: 'Переводы',
+      name: 'РџРµСЂРµРІРѕРґС‹',
       plannedMonthly: 9000,
       remaining: 7500,
       isFavorite: false,
@@ -169,7 +170,7 @@ SimulateDayResponseModel sampleSimulateDayResponse() {
     savingsBalance: 51200,
     savedAmount: 1200,
     autoSaveExecuted: true,
-    notification: 'Safe-to-Save выполнил перевод 1 200 KGS.',
+    notification: 'Safe-to-Save РІС‹РїРѕР»РЅРёР» РїРµСЂРµРІРѕРґ 1 200 KGS.',
   );
 }
 
@@ -188,7 +189,7 @@ AiDashboardModel sampleDashboard([
       (int index) => ForecastPointModel(
         dayOffset: index,
         isoDate: today.add(Duration(days: index)).toIso8601String(),
-        label: 'Д$index',
+        label: 'Р”$index',
         balance: 15000 - (index * 2500),
       ),
     ),
@@ -199,7 +200,7 @@ AiDashboardModel sampleDashboard([
 AiExecutionModel sampleExecution() {
   return const AiExecutionModel(
     success: true,
-    message: 'Перевод выполнен.',
+    message: 'РџРµСЂРµРІРѕРґ РІС‹РїРѕР»РЅРµРЅ.',
     currentBalance: 25000,
     savingsBalance: 40000,
   );
@@ -207,7 +208,7 @@ AiExecutionModel sampleExecution() {
 
 TransferResultModel sampleTransferResult() {
   return TransferResultModel(
-    message: 'Перевод пользователю Aigerim на 1500.0 KGS выполнен.',
+    message: 'РџРµСЂРµРІРѕРґ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ Aigerim РЅР° 1500.0 KGS РІС‹РїРѕР»РЅРµРЅ.',
     fromAccount: sampleAccounts().first,
     recipientType: 'USER',
     recipientName: 'Aigerim',
@@ -218,7 +219,7 @@ TransferResultModel sampleTransferResult() {
 TransferResultModel sampleInternalTransferResult() {
   final accounts = sampleAccounts();
   return TransferResultModel(
-    message: 'Перевод между счетами выполнен.',
+    message: 'РџРµСЂРµРІРѕРґ РјРµР¶РґСѓ СЃС‡РµС‚Р°РјРё РІС‹РїРѕР»РЅРµРЅ.',
     fromAccount: accounts.first,
     toAccount: accounts.last,
     amount: 2500,
@@ -298,11 +299,16 @@ class FakeBankApiService extends BankApiService {
   Map<String, Object?>? lastSmartCategoryDraft;
   int createSmartCategoryFromTransactionCalls = 0;
   Map<String, Object?>? lastSmartCategoryFromTransactionDraft;
+  int bulkCategorizeTransactionsCalls = 0;
+  List<int>? lastBulkCategorizeTransactionIds;
+  String? lastBulkCategorizeCategoryId;
   int simulateDayCalls = 0;
   bool? lastAutoDailySaveEnabled;
   List<Map<String, String>> lastChatHistory = const <Map<String, String>>[];
   List<Map<String, String>> chatHistory = const <Map<String, String>>[];
   String? lastChatMessage;
+  String? lastResolvedAiActionToken;
+  bool? lastResolvedAiActionConfirmed;
 
   @override
   Future<List<AccountModel>> fetchAccounts() async => _accounts;
@@ -334,7 +340,7 @@ class FakeBankApiService extends BankApiService {
     final preview = _buildDailySafeToSave();
     var savedAmount = 0.0;
     var executed = false;
-    var notification = 'День смоделирован.';
+    var notification = 'Р”РµРЅСЊ СЃРјРѕРґРµР»РёСЂРѕРІР°РЅ.';
 
     if (_autoDailySaveEnabled &&
         preview.enabled &&
@@ -345,7 +351,7 @@ class FakeBankApiService extends BankApiService {
       _updateAccountBalance(_mainAccount().id, -savedAmount);
       _updateAccountBalance(_savingsAccount()!.id, savedAmount);
       notification =
-          'Автосейв перевел ${savedAmount.toStringAsFixed(0)} KGS в накопления.';
+          'РђРІС‚РѕСЃРµР№РІ РїРµСЂРµРІРµР» ${savedAmount.toStringAsFixed(0)} KGS РІ РЅР°РєРѕРїР»РµРЅРёСЏ.';
     }
 
     return SimulateDayResponseModel(
@@ -402,10 +408,10 @@ class FakeBankApiService extends BankApiService {
     _updateAccountBalance(accountId, delta);
     final transaction = TransactionModel(
       id: _nextTransactionId++,
-      title: title.isEmpty ? 'Админ корректировка' : title,
+      title: title.isEmpty ? 'РђРґРјРёРЅ РєРѕСЂСЂРµРєС‚РёСЂРѕРІРєР°' : title,
       counterparty: 'Admin',
       amount: delta,
-      category: delta >= 0 ? 'Поступления' : 'Корректировки',
+      category: delta >= 0 ? 'РџРѕСЃС‚СѓРїР»РµРЅРёСЏ' : 'РљРѕСЂСЂРµРєС‚РёСЂРѕРІРєРё',
       iconKey: delta >= 0 ? 'income' : 'calendar',
       type: delta >= 0 ? 'INCOME' : 'ADJUSTMENT',
       status: 'COMPLETED',
@@ -441,7 +447,7 @@ class FakeBankApiService extends BankApiService {
     if (deficit <= 0) {
       return const AiAnalysisModel(
         hasAlert: false,
-        message: 'До конца месяца дефицит не ожидается.',
+        message: 'Р”Рѕ РєРѕРЅС†Р° РјРµСЃСЏС†Р° РґРµС„РёС†РёС‚ РЅРµ РѕР¶РёРґР°РµС‚СЃСЏ.',
         actionToken: null,
       );
     }
@@ -450,7 +456,7 @@ class FakeBankApiService extends BankApiService {
     return AiAnalysisModel(
       hasAlert: suggestions.isNotEmpty,
       message:
-          'К концу месяца прогнозируется дефицит ${deficit.toStringAsFixed(2)} KGS.',
+          'Рљ РєРѕРЅС†Сѓ РјРµСЃСЏС†Р° РїСЂРѕРіРЅРѕР·РёСЂСѓРµС‚СЃСЏ РґРµС„РёС†РёС‚ ${deficit.toStringAsFixed(2)} KGS.',
       actionToken: suggestions.isEmpty ? null : suggestions.first.actionToken,
       suggestions: suggestions,
     );
@@ -487,9 +493,9 @@ class FakeBankApiService extends BankApiService {
         final days = parts.length > 3 ? int.tryParse(parts[3]) ?? 0 : 0;
         await _closeDeposit(depositId);
         if (ids.isEmpty || days <= 0) {
-          return _currentExecution('Депозит закрыт.');
+          return _currentExecution('Р”РµРїРѕР·РёС‚ Р·Р°РєСЂС‹С‚.');
         }
-        return _postponePayments(ids, days, messagePrefix: 'Депозит закрыт.');
+        return _postponePayments(ids, days, messagePrefix: 'Р”РµРїРѕР·РёС‚ Р·Р°РєСЂС‹С‚.');
       default:
         return _executionFallback;
     }
@@ -579,7 +585,7 @@ class FakeBankApiService extends BankApiService {
         title: title,
         counterparty: 'MBank',
         amount: amount,
-        category: 'Кредит',
+        category: 'РљСЂРµРґРёС‚',
         iconKey: 'income',
         type: 'INCOME',
         status: 'COMPLETED',
@@ -597,9 +603,9 @@ class FakeBankApiService extends BankApiService {
         id: _nextScheduledPaymentId++,
         accountId: accountId,
         accountName: account.name,
-        title: '$title · Погашение',
+        title: '$title В· РџРѕРіР°С€РµРЅРёРµ',
         counterparty: 'MBank',
-        category: 'Кредит',
+        category: 'РљСЂРµРґРёС‚',
         iconKey: 'loan',
         amount: amount * 1.12,
         dueDate: dueDate,
@@ -715,6 +721,65 @@ class FakeBankApiService extends BankApiService {
   }
 
   @override
+  Future<void> bulkCategorizeTransactions({
+    required List<int> transactionIds,
+    String? categoryId,
+  }) async {
+    bulkCategorizeTransactionsCalls += 1;
+    lastBulkCategorizeTransactionIds = List<int>.from(transactionIds);
+    lastBulkCategorizeCategoryId = categoryId;
+
+    SmartCategory? category;
+    if (categoryId != null) {
+      final categoryIndex = _smartCategories.indexWhere(
+        (item) => item.id == categoryId,
+      );
+      if (categoryIndex < 0) {
+        throw const ApiException(404, 'Smart category not found.');
+      }
+      category = _smartCategories[categoryIndex];
+    }
+
+    final transactionIdSet = transactionIds.toSet();
+    for (var index = 0; index < _transactions.length; index += 1) {
+      final transaction = _transactions[index];
+      if (!transactionIdSet.contains(transaction.id)) {
+        continue;
+      }
+      _transactions[index] = TransactionModel(
+        id: transaction.id,
+        title: transaction.title,
+        counterparty: transaction.counterparty,
+        amount: transaction.amount,
+        category: transaction.category,
+        iconKey: transaction.iconKey,
+        type: transaction.type,
+        status: transaction.status,
+        accountName: transaction.accountName,
+        occurredAt: transaction.occurredAt,
+        smartCategoryId: categoryId,
+        smartCategoryName: category?.name,
+      );
+
+      if (category != null && transaction.amount < 0) {
+        final existingCategoryIndex = _smartCategories.indexWhere(
+          (item) => item.id == categoryId,
+        );
+        if (existingCategoryIndex >= 0) {
+          final current = _smartCategories[existingCategoryIndex];
+          _smartCategories[existingCategoryIndex] = SmartCategory(
+            id: current.id,
+            name: current.name,
+            plannedMonthly: current.plannedMonthly,
+            remaining: current.remaining - transaction.amount.abs(),
+            isFavorite: current.isFavorite,
+          );
+        }
+      }
+    }
+  }
+
+  @override
   Future<void> setSmartCategoryFavorite(
     String categoryId,
     bool isFavorite,
@@ -723,7 +788,7 @@ class FakeBankApiService extends BankApiService {
       (category) => category.id == categoryId,
     );
     if (currentIndex < 0) {
-      throw const ApiException(404, 'Smart-категория не найдена.');
+      throw const ApiException(404, 'Smart-РєР°С‚РµРіРѕСЂРёСЏ РЅРµ РЅР°Р№РґРµРЅР°.');
     }
 
     if (isFavorite && !_smartCategories[currentIndex].isFavorite) {
@@ -733,7 +798,7 @@ class FakeBankApiService extends BankApiService {
       if (favoriteCount >= 3) {
         throw const ApiException(
           400,
-          'Можно выбрать не больше трех избранных категорий.',
+          'РњРѕР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ РЅРµ Р±РѕР»СЊС€Рµ С‚СЂРµС… РёР·Р±СЂР°РЅРЅС‹С… РєР°С‚РµРіРѕСЂРёР№.',
         );
       }
     }
@@ -775,7 +840,7 @@ class FakeBankApiService extends BankApiService {
       message:
           description?.isNotEmpty == true
               ? description!
-              : 'Перевод между счетами выполнен.',
+              : 'РџРµСЂРµРІРѕРґ РјРµР¶РґСѓ СЃС‡РµС‚Р°РјРё РІС‹РїРѕР»РЅРµРЅ.',
       fromAccount: _findAccountById(fromAccountId) ?? fromAccount,
       toAccount: _findAccountById(toAccountId) ?? toAccount,
       amount: amount,
@@ -815,7 +880,7 @@ class FakeBankApiService extends BankApiService {
   }
 
   @override
-  Future<Map<String, String>> sendAiChatMessage({
+  Future<AiChatReplyModel> sendAiChatMessage({
     required List<Map<String, String>> history,
     required String newMessage,
   }) async {
@@ -823,17 +888,30 @@ class FakeBankApiService extends BankApiService {
         .map((message) => Map<String, String>.from(message))
         .toList(growable: false);
     lastChatMessage = newMessage;
-    final reply = <String, String>{
-      'role': 'assistant',
-      'content':
-          'Safe-to-Save сейчас советует держать резерв под ближайшие платежи и не увеличивать накопления до следующего дохода.',
-    };
+    const role = 'assistant';
+    const content =
+        'Safe-to-Save suggests keeping reserve for upcoming payments before increasing savings.';
     chatHistory = <Map<String, String>>[
       ...history,
       <String, String>{'role': 'user', 'content': newMessage},
-      reply,
+      <String, String>{'role': role, 'content': content},
     ];
-    return reply;
+    return const AiChatReplyModel(role: role, content: content);
+  }
+
+  @override
+  Future<AiChatReplyModel> resolveAiChatAction({
+    required String token,
+    required bool confirmed,
+  }) async {
+    lastResolvedAiActionToken = token;
+    lastResolvedAiActionConfirmed = confirmed;
+    return AiChatReplyModel(
+      role: 'assistant',
+      content: confirmed
+          ? 'Category deleted.'
+          : 'Category deletion canceled.',
+    );
   }
 
   AiDashboardModel _buildDashboard(int offsetDays) {
@@ -900,9 +978,9 @@ class FakeBankApiService extends BankApiService {
       suggestions.add(
         BalanceSuggestionModel(
           id: 'close-deposit-${savingsAccount.id}',
-          title: 'Закрыть депозит',
+          title: 'Р—Р°РєСЂС‹С‚СЊ РґРµРїРѕР·РёС‚',
           description:
-              'Закрытие накопительного депозита даст ${savingsAccount.balance.toStringAsFixed(2)} KGS.',
+              'Р—Р°РєСЂС‹С‚РёРµ РЅР°РєРѕРїРёС‚РµР»СЊРЅРѕРіРѕ РґРµРїРѕР·РёС‚Р° РґР°СЃС‚ ${savingsAccount.balance.toStringAsFixed(2)} KGS.',
           actionToken: 'CLOSE_DEPOSIT:${savingsAccount.id}',
         ),
       );
@@ -922,9 +1000,9 @@ class FakeBankApiService extends BankApiService {
       suggestions.add(
         BalanceSuggestionModel(
           id: 'postpone-${single.id}',
-          title: 'Перенести платеж "${single.title}"',
+          title: 'РџРµСЂРµРЅРµСЃС‚Рё РїР»Р°С‚РµР¶ "${single.title}"',
           description:
-              'Сдвиг на $postponeDays дн. освободит ${single.amount.toStringAsFixed(2)} KGS.',
+              'РЎРґРІРёРі РЅР° $postponeDays РґРЅ. РѕСЃРІРѕР±РѕРґРёС‚ ${single.amount.toStringAsFixed(2)} KGS.',
           actionToken: 'POSTPONE:${single.id}:$postponeDays',
         ),
       );
@@ -945,10 +1023,10 @@ class FakeBankApiService extends BankApiService {
         BalanceSuggestionModel(
           id: 'postpone-group-$ids',
           title: grouped.length == 1
-              ? 'Перенести гибкий платеж'
-              : 'Перенести группу платежей',
+              ? 'РџРµСЂРµРЅРµСЃС‚Рё РіРёР±РєРёР№ РїР»Р°С‚РµР¶'
+              : 'РџРµСЂРµРЅРµСЃС‚Рё РіСЂСѓРїРїСѓ РїР»Р°С‚РµР¶РµР№',
           description:
-              'Перенос ${grouped.length} платежей освободит ${covered.toStringAsFixed(2)} KGS.',
+              'РџРµСЂРµРЅРѕСЃ ${grouped.length} РїР»Р°С‚РµР¶РµР№ РѕСЃРІРѕР±РѕРґРёС‚ ${covered.toStringAsFixed(2)} KGS.',
           actionToken: 'POSTPONE_GROUP:$ids:$postponeDays',
         ),
       );
@@ -959,9 +1037,9 @@ class FakeBankApiService extends BankApiService {
         suggestions.add(
           BalanceSuggestionModel(
             id: 'combo-${savingsAccount.id}-$ids',
-            title: 'Комбинировать депозит и перенос',
+            title: 'РљРѕРјР±РёРЅРёСЂРѕРІР°С‚СЊ РґРµРїРѕР·РёС‚ Рё РїРµСЂРµРЅРѕСЃ',
             description:
-                'Закройте депозит и перенесите ${grouped.length} платежей, чтобы убрать разрыв.',
+                'Р—Р°РєСЂРѕР№С‚Рµ РґРµРїРѕР·РёС‚ Рё РїРµСЂРµРЅРµСЃРёС‚Рµ ${grouped.length} РїР»Р°С‚РµР¶РµР№, С‡С‚РѕР±С‹ СѓР±СЂР°С‚СЊ СЂР°Р·СЂС‹РІ.',
             actionToken:
                 'CLOSE_DEPOSIT_AND_POSTPONE:${savingsAccount.id}:$ids:$postponeDays',
           ),
@@ -977,16 +1055,16 @@ class FakeBankApiService extends BankApiService {
         ? _savingsAccount()
         : _findAccountById(depositId);
     if (savingsAccount == null) {
-      return _currentExecution('Накопительный депозит не найден.', success: false);
+      return _currentExecution('РќР°РєРѕРїРёС‚РµР»СЊРЅС‹Р№ РґРµРїРѕР·РёС‚ РЅРµ РЅР°Р№РґРµРЅ.', success: false);
     }
     if (savingsAccount.balance <= 0) {
-      return _currentExecution('Накопительный депозит уже пуст.', success: false);
+      return _currentExecution('РќР°РєРѕРїРёС‚РµР»СЊРЅС‹Р№ РґРµРїРѕР·РёС‚ СѓР¶Рµ РїСѓСЃС‚.', success: false);
     }
 
     final amount = savingsAccount.balance;
     _updateAccountBalance(savingsAccount.id, -amount);
     _updateAccountBalance(_mainAccount().id, amount);
-    return _currentExecution('Депозит закрыт.');
+    return _currentExecution('Р”РµРїРѕР·РёС‚ Р·Р°РєСЂС‹С‚.');
   }
 
   Future<AiExecutionModel> _postponePayments(
@@ -1020,12 +1098,12 @@ class FakeBankApiService extends BankApiService {
     );
 
     if (changed == 0) {
-      return _currentExecution('Платеж для переноса не найден.', success: false);
+      return _currentExecution('РџР»Р°С‚РµР¶ РґР»СЏ РїРµСЂРµРЅРѕСЃР° РЅРµ РЅР°Р№РґРµРЅ.', success: false);
     }
 
     final prefix = messagePrefix == null ? '' : '$messagePrefix ';
-    final noun = changed == 1 ? 'платеж' : 'платежей';
-    return _currentExecution('$prefixПеренесено $changed $noun.');
+    final noun = changed == 1 ? 'РїР»Р°С‚РµР¶' : 'РїР»Р°С‚РµР¶РµР№';
+    return _currentExecution('$prefixРџРµСЂРµРЅРµСЃРµРЅРѕ $changed $noun.');
   }
 
   AiExecutionModel _currentExecution(
@@ -1086,10 +1164,10 @@ class FakeBankApiService extends BankApiService {
   bool _isFlexiblePayment(ScheduledPaymentModel payment) {
     final category = payment.category.toLowerCase();
     final title = payment.title.toLowerCase();
-    return !category.contains('аренд') &&
-        !category.contains('коммун') &&
-        !category.contains('кредит') &&
-        !title.contains('аренд');
+    return !category.contains('Р°СЂРµРЅРґ') &&
+        !category.contains('РєРѕРјРјСѓРЅ') &&
+        !category.contains('РєСЂРµРґРёС‚') &&
+        !title.contains('Р°СЂРµРЅРґ');
   }
 
   List<int> _parsePaymentIds(String value) {
@@ -1122,31 +1200,31 @@ class FakeBankApiService extends BankApiService {
 
   String _shortDateLabel(DateTime value) {
     const months = <String>[
-      'янв.',
-      'фев.',
-      'мар.',
-      'апр.',
-      'мая',
-      'июн.',
-      'июл.',
-      'авг.',
-      'сент.',
-      'окт.',
-      'нояб.',
-      'дек.',
+      'СЏРЅРІ.',
+      'С„РµРІ.',
+      'РјР°СЂ.',
+      'Р°РїСЂ.',
+      'РјР°СЏ',
+      'РёСЋРЅ.',
+      'РёСЋР».',
+      'Р°РІРі.',
+      'СЃРµРЅС‚.',
+      'РѕРєС‚.',
+      'РЅРѕСЏР±.',
+      'РґРµРє.',
     ];
     return '${value.day} ${months[value.month - 1]}';
   }
 
   String _iconForCategory(String category) {
     final normalized = category.toLowerCase();
-    if (normalized.contains('аренд')) {
+    if (normalized.contains('Р°СЂРµРЅРґ')) {
       return 'home';
     }
-    if (normalized.contains('подпис')) {
+    if (normalized.contains('РїРѕРґРїРёСЃ')) {
       return 'subscription';
     }
-    if (normalized.contains('кредит')) {
+    if (normalized.contains('РєСЂРµРґРёС‚')) {
       return 'loan';
     }
     return 'calendar';
@@ -1223,5 +1301,7 @@ TransactionModel _copyTransaction(TransactionModel transaction) {
     status: transaction.status,
     accountName: transaction.accountName,
     occurredAt: transaction.occurredAt,
+    smartCategoryId: transaction.smartCategoryId,
+    smartCategoryName: transaction.smartCategoryName,
   );
 }

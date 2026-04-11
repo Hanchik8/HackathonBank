@@ -295,7 +295,7 @@ void main() {
       newMessage: 'Что делать до зарплаты?',
     );
 
-    expect(reply['role'], 'assistant');
+    expect(reply.role, 'assistant');
     expect(reply['content'], 'Сейчас важнее держать резерв под аренду.');
     expect(
       fakeApiClient.postBodies['/ai/chat'],

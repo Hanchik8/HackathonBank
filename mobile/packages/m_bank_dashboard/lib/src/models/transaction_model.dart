@@ -10,6 +10,8 @@ class TransactionModel {
     required this.status,
     required this.accountName,
     required this.occurredAt,
+    this.smartCategoryId,
+    this.smartCategoryName,
   });
 
   final int id;
@@ -22,6 +24,8 @@ class TransactionModel {
   final String status;
   final String accountName;
   final DateTime occurredAt;
+  final String? smartCategoryId;
+  final String? smartCategoryName;
 
   bool get isIncome => amount >= 0;
 
@@ -37,6 +41,8 @@ class TransactionModel {
       status: json['status'] as String,
       accountName: json['accountName'] as String,
       occurredAt: DateTime.parse(json['occurredAt'] as String),
+      smartCategoryId: json['smartCategoryId']?.toString(),
+      smartCategoryName: json['smartCategoryName'] as String?,
     );
   }
 }

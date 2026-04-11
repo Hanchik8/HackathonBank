@@ -28,10 +28,11 @@ void main() {
     expect(find.byType(NotificationTile), findsAtLeastNWidgets(3));
   });
 
-  testWidgets('adds expense notification to smart list', (
+  testWidgets('assigns expense notification to existing smart list category', (
     WidgetTester tester,
   ) async {
     final apiService = FakeBankApiService();
+    final targetCategory = (await apiService.fetchSmartCategories()).first;
 
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -55,13 +56,12 @@ void main() {
     await tester.tap(actionFinder);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c'));
+    await tester.tap(find.widgetWithText(ListTile, targetCategory.name));
     await tester.pumpAndSettle();
 
-    expect(apiService.createSmartCategoryFromTransactionCalls, 1);
-    expect(
-      apiService.lastSmartCategoryFromTransactionDraft?['transactionId'],
-      1,
-    );
+    expect(apiService.bulkCategorizeTransactionsCalls, 1);
+    expect(apiService.lastBulkCategorizeTransactionIds, <int>[1]);
+    expect(apiService.lastBulkCategorizeCategoryId, targetCategory.id);
+    expect(actionFinder, findsNothing);
   });
 }

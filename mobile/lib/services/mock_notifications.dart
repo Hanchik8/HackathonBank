@@ -65,6 +65,7 @@ NotificationModel _fromTransaction(
     type: isIncome ? NotificationType.credit : NotificationType.debit,
     transactionId: isIncome ? null : transaction.id,
     smartCategoryHint: isIncome ? null : transaction.category,
+    smartCategoryId: transaction.smartCategoryId,
   );
 }
 

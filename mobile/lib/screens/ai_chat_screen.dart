@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../models/ai_chat_pending_action_model.dart';
 import '../services/api_client.dart';
 import '../services/bank_api_service.dart';
 import '../theme/app_theme.dart';
@@ -14,6 +16,7 @@ class AiChatScreen extends StatefulWidget {
 }
 
 class _AiChatScreenState extends State<AiChatScreen> {
+  static const _maxVisibleMessages = 60;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<Map<String, String>> _messages = <Map<String, String>>[];
@@ -43,7 +46,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       setState(() {
         _messages
           ..clear()
-          ..addAll(history);
+          ..addAll(_trimMessages(history));
         _isHistoryLoading = false;
       });
       _scrollToBottom();
@@ -54,9 +57,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
       setState(() {
         _isHistoryLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) {
         return;
@@ -86,7 +89,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     _controller.clear();
 
     setState(() {
-      _messages.add(<String, String>{'role': 'user', 'content': text});
+      _appendMessage(role: 'user', content: text);
       _isLoading = true;
     });
     _scrollToBottom();
@@ -100,22 +103,27 @@ class _AiChatScreenState extends State<AiChatScreen> {
         return;
       }
       setState(() {
-        _messages.add(response);
+        _appendMessage(role: response.role, content: response.content);
       });
       _scrollToBottom();
+      if (response.pendingAction != null) {
+        await _handlePendingAction(response.pendingAction!);
+      }
     } on ApiException catch (error) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Не удалось получить ответ ИИ ассистента.')),
+        const SnackBar(
+          content: Text('Не удалось получить ответ ИИ ассистента.'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -126,17 +134,144 @@ class _AiChatScreenState extends State<AiChatScreen> {
     }
   }
 
+  Future<void> _handlePendingAction(AiChatPendingActionModel action) async {
+    if (!mounted || action.type != 'deleteSmartCategory') {
+      return;
+    }
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          decoration: const BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  action.title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  action.description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.secondaryText,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('Отмена'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('Удалить'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    try {
+      final resolution = await widget.apiService.resolveAiChatAction(
+        token: action.token,
+        confirmed: confirmed ?? false,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _appendMessage(role: resolution.role, content: resolution.content);
+      });
+      _scrollToBottom();
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось завершить действие ИИ.')),
+      );
+    }
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) {
         return;
       }
+      final targetOffset = _scrollController.position.maxScrollExtent + 120;
+      if (kIsWeb) {
+        _scrollController.jumpTo(targetOffset);
+        return;
+      }
+      final distance = (targetOffset - _scrollController.offset).abs();
+      if (distance < 80) {
+        _scrollController.jumpTo(targetOffset);
+        return;
+      }
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 120,
+        targetOffset,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
     });
+  }
+
+  void _appendMessage({required String role, required String content}) {
+    _messages.add(<String, String>{'role': role, 'content': content});
+    final overflow = _messages.length - _maxVisibleMessages;
+    if (overflow > 0) {
+      _messages.removeRange(0, overflow);
+    }
+  }
+
+  List<Map<String, String>> _trimMessages(List<Map<String, String>> messages) {
+    final overflow = messages.length - _maxVisibleMessages;
+    return overflow <= 0 ? messages : messages.sublist(overflow);
   }
 
   @override
@@ -176,8 +311,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                         final message = _messages[index];
                         final isUser = message['role'] == 'user';
                         return Align(
-                          alignment:
-                              isUser ? Alignment.centerRight : Alignment.centerLeft,
+                          alignment: isUser
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
                           child: Container(
                             constraints: const BoxConstraints(maxWidth: 320),
                             margin: const EdgeInsets.only(bottom: 12),
@@ -186,7 +322,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: isUser ? AppTheme.accent : AppTheme.surface,
+                              color: isUser
+                                  ? AppTheme.accent
+                                  : AppTheme.surface,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Text(
@@ -239,7 +377,9 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     width: 52,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: _isLoading || _isHistoryLoading ? null : _sendMessage,
+                      onPressed: _isLoading || _isHistoryLoading
+                          ? null
+                          : _sendMessage,
                       style: ElevatedButton.styleFrom(
                         padding: EdgeInsets.zero,
                         shape: const CircleBorder(),
@@ -329,8 +469,10 @@ class _Dot extends StatelessWidget {
       animation: animation,
       builder: (context, child) {
         final shifted = (animation.value + phase) % 1;
-        final opacity = 0.35 + (0.65 * (1 - (shifted - 0.5).abs() * 2).clamp(0, 1));
-        final scale = 0.85 + (0.3 * (1 - (shifted - 0.5).abs() * 2).clamp(0, 1));
+        final opacity =
+            0.35 + (0.65 * (1 - (shifted - 0.5).abs() * 2).clamp(0, 1));
+        final scale =
+            0.85 + (0.3 * (1 - (shifted - 0.5).abs() * 2).clamp(0, 1));
         return Opacity(
           opacity: opacity,
           child: Transform.scale(scale: scale, child: child),

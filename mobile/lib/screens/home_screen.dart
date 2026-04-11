@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/account_model.dart';
+import '../models/notification_model.dart';
 import '../models/transaction_model.dart';
 import '../services/bank_api_service.dart';
 import '../services/mock_notifications.dart';
@@ -47,8 +48,17 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<AccountModel>? _accounts;
+  AccountModel? _mainAccount;
   List<TransactionModel>? _transactions;
+  List<TransactionModel> _recentTransactions = const <TransactionModel>[];
+  List<NotificationModel> _notifications = const <NotificationModel>[];
   DateTime _effectiveDate = DateTime.now();
+  int _unreadNotifications = 0;
+  double _monthlyIncome = 0;
+  double _monthlyExpense = 0;
+  double _qrExpense = 0;
+  double _transferExpense = 0;
+  double _shoppingExpense = 0;
   String? _errorMessage;
   bool _isLoading = true;
 
@@ -84,9 +94,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       setState(() {
-        _accounts = results[0] as List<AccountModel>;
-        _transactions = results[1] as List<TransactionModel>;
-        _effectiveDate = results[2] as DateTime;
+        final accounts = results[0] as List<AccountModel>;
+        final transactions = results[1] as List<TransactionModel>;
+        final effectiveDate = results[2] as DateTime;
+        _accounts = accounts;
+        _transactions = transactions;
+        _effectiveDate = effectiveDate;
+        _recomputeDerivedState(
+          accounts: accounts,
+          transactions: transactions,
+          effectiveDate: effectiveDate,
+        );
         _isLoading = false;
       });
     } catch (error) {
@@ -98,6 +116,59 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _recomputeDerivedState({
+    required List<AccountModel> accounts,
+    required List<TransactionModel> transactions,
+    required DateTime effectiveDate,
+  }) {
+    _mainAccount = accounts.firstWhere(
+      (account) => account.type == 'MAIN',
+      orElse: () => accounts.first,
+    );
+    _recentTransactions = transactions.take(6).toList(growable: false);
+    _notifications = getMockNotifications(transactions: transactions);
+    _unreadNotifications = _notifications
+        .where((notification) => !notification.isRead)
+        .length;
+
+    final currentMonth = effectiveDate.month;
+    final monthTransactions = transactions.where(
+      (transaction) => transaction.occurredAt.month == currentMonth,
+    );
+
+    var monthlyIncome = 0.0;
+    var monthlyExpense = 0.0;
+    var qrExpense = 0.0;
+    var transferExpense = 0.0;
+    var shoppingExpense = 0.0;
+
+    for (final transaction in monthTransactions) {
+      final amount = transaction.amount;
+      if (amount > 0) {
+        monthlyIncome += amount;
+      }
+      if (amount < 0 && transaction.status == 'COMPLETED') {
+        final absoluteAmount = amount.abs();
+        monthlyExpense += absoluteAmount;
+        if (transaction.type == 'QR_TRANSFER') {
+          qrExpense += absoluteAmount;
+        }
+        if (transaction.type == 'TRANSFER') {
+          transferExpense += absoluteAmount;
+        }
+        if (transaction.iconKey == 'shopping') {
+          shoppingExpense += absoluteAmount;
+        }
+      }
+    }
+
+    _monthlyIncome = monthlyIncome;
+    _monthlyExpense = monthlyExpense;
+    _qrExpense = qrExpense;
+    _transferExpense = transferExpense;
+    _shoppingExpense = shoppingExpense;
   }
 
   Future<void> _openMyBankScreen(List<AccountModel> accounts) async {
@@ -113,14 +184,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openNotificationsScreen() async {
-    final transactions = _transactions ?? const <TransactionModel>[];
-    final notifications = getMockNotifications(transactions: transactions);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NotificationsScreen(
           apiService: widget.apiService,
-          transactions: transactions,
-          notifications: notifications,
+          transactions: _transactions ?? const <TransactionModel>[],
+          notifications: _notifications,
           onSmartListChanged: widget.onDataChanged,
         ),
       ),
@@ -138,38 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final accounts = _accounts!;
-    final transactions = _transactions!;
-    final mainAccount = accounts.firstWhere(
-      (account) => account.type == 'MAIN',
-      orElse: () => accounts.first,
-    );
-    final notifications = getMockNotifications(transactions: transactions);
-    final unreadNotifications = notifications
-        .where((notification) => !notification.isRead)
-        .length;
-    final currentMonth = _effectiveDate.month;
-    final monthTransactions = transactions
-        .where((transaction) => transaction.occurredAt.month == currentMonth)
-        .toList();
-
-    final monthlyIncome = monthTransactions
-        .where((transaction) => transaction.amount > 0)
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount);
-    final monthlyExpense = monthTransactions
-        .where(
-          (transaction) =>
-              transaction.amount < 0 && transaction.status == 'COMPLETED',
-        )
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount.abs());
-    final qrExpense = monthTransactions
-        .where((transaction) => transaction.type == 'QR_TRANSFER')
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount.abs());
-    final transferExpense = monthTransactions
-        .where((transaction) => transaction.type == 'TRANSFER')
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount.abs());
-    final shoppingExpense = monthTransactions
-        .where((transaction) => transaction.iconKey == 'shopping')
-        .fold<double>(0, (sum, transaction) => sum + transaction.amount.abs());
 
     return RefreshIndicator(
       onRefresh: _loadData,
@@ -177,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
         padding: const EdgeInsets.fromLTRB(18, 10, 18, 120),
         children: <Widget>[
           _HeaderRow(
-            unreadNotifications: unreadNotifications,
+            unreadNotifications: _unreadNotifications,
             onNotificationsTap: _openNotificationsScreen,
           ),
           const SizedBox(height: 20),
@@ -191,16 +228,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _MonthSummaryCard(
                   title:
                       'За ${HomeScreen._monthNames[_effectiveDate.month - 1]}',
-                  value: SomFormatter.amount(monthlyExpense, fractionDigits: 0),
+                  value: SomFormatter.amount(
+                    _monthlyExpense,
+                    fractionDigits: 0,
+                  ),
                   segments: <SpendSegment>[
-                    SpendSegment(color: AppTheme.blue, value: qrExpense),
+                    SpendSegment(color: AppTheme.blue, value: _qrExpense),
                     SpendSegment(
                       color: AppTheme.accent,
-                      value: transferExpense,
+                      value: _transferExpense,
                     ),
                     SpendSegment(
                       color: AppTheme.yellow,
-                      value: shoppingExpense,
+                      value: _shoppingExpense,
                     ),
                   ],
                 ),
@@ -213,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 156, child: _HeroBannerRow()),
           const SizedBox(height: 18),
           BankCardPreview(
-            account: mainAccount,
+            account: _mainAccount ?? accounts.first,
             cardLabel: '\u2022\u20220484',
             onTap: () => _openMyBankScreen(accounts),
           ),
@@ -237,17 +277,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-          ...transactions
-              .take(6)
-              .map(
-                (transaction) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: TransactionTile(transaction: transaction),
-                ),
-              ),
+          ..._recentTransactions.map(
+            (transaction) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: TransactionTile(transaction: transaction),
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
-            'Поступления за ${HomeScreen._monthNames[_effectiveDate.month - 1]}: ${SomFormatter.amount(monthlyIncome)}',
+            'Поступления за ${HomeScreen._monthNames[_effectiveDate.month - 1]}: ${SomFormatter.amount(_monthlyIncome)}',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: AppTheme.secondaryText),

@@ -4,6 +4,7 @@ import com.example.hackathonbank.controller.dto.BooleanSettingRequest;
 import com.example.hackathonbank.controller.dto.BooleanSettingResponse;
 import com.example.hackathonbank.controller.dto.SmartCategoryCreateRequest;
 import com.example.hackathonbank.controller.dto.SmartCategoryFavoriteRequest;
+import com.example.hackathonbank.controller.dto.SmartCategoryLimitUpdateRequest;
 import com.example.hackathonbank.controller.dto.SmartCategoryLinkTransactionRequest;
 import com.example.hackathonbank.controller.dto.SmartCategoryResponse;
 import com.example.hackathonbank.service.SmartCategoryService;
@@ -60,6 +61,12 @@ public class SmartCategoryController {
     public void setFavorite(@PathVariable Long categoryId,
                             @Valid @RequestBody SmartCategoryFavoriteRequest request) {
         smartCategoryService.setFavorite(categoryId, request.isFavorite());
+    }
+
+    @PostMapping("/{categoryId}/limit")
+    public SmartCategoryResponse updateLimit(@PathVariable Long categoryId,
+                                             @Valid @RequestBody SmartCategoryLimitUpdateRequest request) {
+        return smartCategoryService.updateCategoryLimit(categoryId, request.plannedMonthly());
     }
 
     @PostMapping("/{categoryId}/delete")

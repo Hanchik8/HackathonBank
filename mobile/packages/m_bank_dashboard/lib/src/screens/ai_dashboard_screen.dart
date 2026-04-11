@@ -44,6 +44,14 @@ class AiDashboardScreen extends StatefulWidget {
 }
 
 class _AiDashboardScreenState extends State<AiDashboardScreen> {
+  static const _emptySummary = _AnalysisSummary(
+    income: 0,
+    expenses: 0,
+    qr: 0,
+    transfers: 0,
+    shopping: 0,
+    restaurants: 0,
+  );
   static const List<String> _monthTitles = <String>[
     'январь',
     'февраль',
@@ -86,6 +94,8 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   int? _deletingPaymentId;
   DateTime _effectiveDate = _today();
   late int _offsetDays;
+  _AnalysisSummary _summary = _emptySummary;
+  String _summaryTitleText = '';
 
   @override
   void initState() {
@@ -146,6 +156,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _autoDailySaveEnabled = results[8] as bool;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
+        _refreshSummary();
         _isLoading = false;
       });
     } catch (error) {
@@ -187,6 +198,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         _dailySafeToSave = results[4] as DailySafeToSaveModel;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
+        _refreshSummary();
       });
     } catch (error) {
       if (!mounted) {
@@ -196,9 +208,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     }
   }
 
-  Future<void> _refreshSmartListState({
-    bool includeSettings = false,
-  }) async {
+  Future<void> _refreshSmartListState({bool includeSettings = false}) async {
     try {
       final futures = <Future<dynamic>>[
         widget.repository.fetchSmartCategories(),
@@ -801,14 +811,12 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final transactions = _transactions!;
     final smartCategories = _smartCategories!;
     final scheduledPayments = dashboard.scheduledPayments;
-    final summary = _buildSummary(transactions, _offsetDays);
     final reminderCount = scheduledPayments
         .where((payment) => payment.isReminder)
         .length;
     final nearestPayment = scheduledPayments.isEmpty
         ? null
         : scheduledPayments.first;
-    final summaryTitle = _summaryTitle(_offsetDays);
     final maxDays = _daysUntilEndOfMonth();
     final sliderMax = maxDays <= 0 ? 1 : maxDays;
     final sliderValue = _offsetDays.clamp(0, sliderMax).toDouble();
@@ -912,14 +920,14 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
           ),
           const SizedBox(height: 18),
           _MonthAnalysisCard(
-            summary: summary,
-            title: summaryTitle,
+            summary: _summary,
+            title: _summaryTitleText,
             onTap: () => Navigator.of(context).push(
               PageRouteBuilder<void>(
                 pageBuilder: (routeContext, animation, secondaryAnimation) =>
                     DetailedAnalyticsScreen(
-                      transactions: _transactions ?? const <TransactionModel>[],
-                      backendForecastPoints: _dashboard?.points,
+                      transactions: transactions,
+                      backendForecastPoints: dashboard.points,
                     ),
                 transitionsBuilder:
                     (routeContext, animation, secondaryAnimation, child) =>
@@ -940,7 +948,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          _BreakdownCard(summary: summary),
+          _BreakdownCard(summary: _summary),
           if (analysis.hasAlert) ...<Widget>[
             const SizedBox(height: 18),
             BalanceAdviceCard(
@@ -957,7 +965,10 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
             sliderValue: sliderValue,
             offsetDays: _offsetDays,
             maxDays: maxDays,
-            onChanged: (value) => setState(() => _offsetDays = value.round()),
+            onChanged: (value) => setState(() {
+              _offsetDays = value.round();
+              _refreshSummary();
+            }),
             onChangeEnd: (_) => _loadData(),
           ),
           const SizedBox(height: 18),
@@ -1085,6 +1096,14 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
       shopping: shopping,
       restaurants: restaurants,
     );
+  }
+
+  void _refreshSummary() {
+    _summaryTitleText = _summaryTitle(_offsetDays);
+    final transactions = _transactions;
+    _summary = transactions == null
+        ? _emptySummary
+        : _buildSummary(transactions, _offsetDays);
   }
 
   String _summaryTitle(int offsetDays) {
