@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../contracts/dashboard_repository.dart';
@@ -77,6 +79,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
   bool _isLoading = true;
   bool _isExecuting = false;
+  bool _isAnalysisLoading = false;
   bool _isCreatingPayment = false;
   bool _isCreatingTransaction = false;
   bool _isCreatingCategory = false;
@@ -92,6 +95,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
   String? _deletingCategoryId;
   String? _updatingFavoriteCategoryId;
   int? _deletingPaymentId;
+  int _analysisRequestVersion = 0;
   DateTime _effectiveDate = _today();
   late int _offsetDays;
   _AnalysisSummary _summary = _emptySummary;
@@ -120,13 +124,16 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
 
     setState(() {
       _isLoading = true;
+      _isAnalysisLoading = true;
       _errorMessage = null;
     });
 
     try {
+      final (analysisRequestVersion, analysisFuture) = _startAnalysisRequest(
+        requestOffset,
+      );
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
         widget.repository.fetchDashboard(requestOffset),
-        widget.repository.analyzeCashFlow(requestOffset),
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
         widget.repository.fetchSmartCategories(),
@@ -141,30 +148,32 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         return;
       }
 
-      final effectiveDate = results[9] as DateTime;
+      final effectiveDate = results[8] as DateTime;
       final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
         _dashboard = results[0] as AiDashboardModel;
-        _analysis = results[1] as AiAnalysisModel;
-        _transactions = results[2] as List<TransactionModel>;
-        _accounts = results[3] as List<AccountModel>;
-        _smartCategories = results[4] as List<SmartCategory>;
-        _dailySafeToSave = results[5] as DailySafeToSaveModel;
-        _smartListEnabled = results[6] as bool;
-        _adminModeEnabled = results[7] as bool;
-        _autoDailySaveEnabled = results[8] as bool;
+        _transactions = results[1] as List<TransactionModel>;
+        _accounts = results[2] as List<AccountModel>;
+        _smartCategories = results[3] as List<SmartCategory>;
+        _dailySafeToSave = results[4] as DailySafeToSaveModel;
+        _smartListEnabled = results[5] as bool;
+        _adminModeEnabled = results[6] as bool;
+        _autoDailySaveEnabled = results[7] as bool;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
         _refreshSummary();
         _isLoading = false;
       });
+      unawaited(_applyAnalysisFuture(analysisFuture, analysisRequestVersion));
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
+        _analysisRequestVersion++;
         _errorMessage = error.toString();
+        _isAnalysisLoading = false;
         _isLoading = false;
       });
     }
@@ -174,9 +183,14 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     final requestOffset = _offsetDays.clamp(0, _daysUntilEndOfMonth());
 
     try {
+      final (analysisRequestVersion, analysisFuture) = _startAnalysisRequest(
+        requestOffset,
+      );
+      setState(() {
+        _isAnalysisLoading = true;
+      });
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
         widget.repository.fetchDashboard(requestOffset),
-        widget.repository.analyzeCashFlow(requestOffset),
         widget.repository.fetchTransactions(),
         widget.repository.fetchAccounts(),
         widget.repository.fetchDailySafeToSave(),
@@ -187,25 +201,35 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
         return;
       }
 
-      final effectiveDate = results[5] as DateTime;
+      final effectiveDate = results[4] as DateTime;
       final maxDays = _daysUntilEndOfMonthFrom(effectiveDate);
 
       setState(() {
         _dashboard = results[0] as AiDashboardModel;
-        _analysis = results[1] as AiAnalysisModel;
-        _transactions = results[2] as List<TransactionModel>;
-        _accounts = results[3] as List<AccountModel>;
-        _dailySafeToSave = results[4] as DailySafeToSaveModel;
+        _transactions = results[1] as List<TransactionModel>;
+        _accounts = results[2] as List<AccountModel>;
+        _dailySafeToSave = results[3] as DailySafeToSaveModel;
         _effectiveDate = effectiveDate;
         _offsetDays = _offsetDays.clamp(0, maxDays);
         _refreshSummary();
       });
+      unawaited(_applyAnalysisFuture(analysisFuture, analysisRequestVersion));
     } catch (error) {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _analysisRequestVersion++;
+        _isAnalysisLoading = false;
+      });
       _showMessage(error.toString());
     }
+  }
+
+  (int, Future<AiAnalysisModel>) _startAnalysisRequest(int requestOffset) {
+    final analysisRequestVersion = ++_analysisRequestVersion;
+    final analysisFuture = widget.repository.analyzeCashFlow(requestOffset);
+    return (analysisRequestVersion, analysisFuture);
   }
 
   Future<void> _refreshSmartListState({bool includeSettings = false}) async {
@@ -786,6 +810,30 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _applyAnalysisFuture(
+    Future<AiAnalysisModel> future,
+    int requestVersion,
+  ) async {
+    try {
+      final analysis = await future;
+      if (!mounted || requestVersion != _analysisRequestVersion) {
+        return;
+      }
+      setState(() {
+        _analysis = analysis;
+        _isAnalysisLoading = false;
+      });
+    } catch (error) {
+      if (!mounted || requestVersion != _analysisRequestVersion) {
+        return;
+      }
+      setState(() {
+        _isAnalysisLoading = false;
+      });
+      _showMessage(error.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -806,7 +854,7 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
     }
 
     final dashboard = _dashboard!;
-    final analysis = _analysis!;
+    final analysis = _analysis;
     final dailySafeToSave = _dailySafeToSave!;
     final transactions = _transactions!;
     final smartCategories = _smartCategories!;
@@ -949,10 +997,13 @@ class _AiDashboardScreenState extends State<AiDashboardScreen> {
           ),
           const SizedBox(height: 18),
           _BreakdownCard(summary: _summary),
-          if (analysis.hasAlert) ...<Widget>[
+          if (_isAnalysisLoading) ...<Widget>[
+            const SizedBox(height: 18),
+            const Center(child: CircularProgressIndicator()),
+          ] else if (analysis?.hasAlert ?? false) ...<Widget>[
             const SizedBox(height: 18),
             BalanceAdviceCard(
-              analysis: analysis,
+              analysis: analysis!,
               isLoading: _isExecuting,
               onExecute: _executeSuggestion,
             ),

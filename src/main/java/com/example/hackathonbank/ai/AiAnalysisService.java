@@ -71,7 +71,7 @@ public class AiAnalysisService {
         AiDashboardResponse dashboard = forecastService.buildDashboard(offsetDays);
         List<Transaction> transactions = transactionService.getTransactionsForCurrentUser();
         List<ScheduledPayment> pendingPayments = scheduledPaymentService.getPendingPayments();
-        EnrichmentSummary enrichmentSummary = transactionEnrichmentService.enrich(
+        EnrichmentSummary enrichmentSummary = transactionEnrichmentService.enrichDeterministic(
                 transactions,
                 pendingPayments,
                 dashboard.minimumProjectedBalance()

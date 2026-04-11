@@ -39,7 +39,7 @@ class _ForecastCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Прогноз баланса',
+                      'РџСЂРѕРіРЅРѕР· Р±Р°Р»Р°РЅСЃР°',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
@@ -58,7 +58,7 @@ class _ForecastCard extends StatelessWidget {
                 ),
               ),
               MiniBadge(
-                label: '$scheduledPaymentCount платежей',
+                label: '$scheduledPaymentCount РїР»Р°С‚РµР¶РµР№',
                 color: AppTheme.accent,
               ),
             ],
@@ -67,7 +67,7 @@ class _ForecastCard extends StatelessWidget {
           SizedBox(height: 180, child: ForecastChart(dashboard: dashboard)),
           const SizedBox(height: 16),
           Text(
-            'Машина времени',
+            'РњР°С€РёРЅР° РІСЂРµРјРµРЅРё',
             style: Theme.of(
               context,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -77,12 +77,12 @@ class _ForecastCard extends StatelessWidget {
             max: sliderMax.toDouble(),
             divisions: sliderMax,
             value: sliderValue,
-            label: '$offsetDays дн.',
+            label: '$offsetDays РґРЅ.',
             onChanged: onChanged,
             onChangeEnd: onChangeEnd,
           ),
           Text(
-            'Горизонт до конца месяца: $maxDays дн.',
+            'Р“РѕСЂРёР·РѕРЅС‚ РґРѕ РєРѕРЅС†Р° РјРµСЃСЏС†Р°: $maxDays РґРЅ.',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
@@ -92,13 +92,13 @@ class _ForecastCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               Text(
-                '0 дн.',
+                '0 РґРЅ.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
               ),
               Text(
-                '$maxDays дн.',
+                '$maxDays РґРЅ.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: AppTheme.secondaryText),
@@ -149,15 +149,15 @@ class _AdminModeCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Режим Админа',
+                      'Р РµР¶РёРј РђРґРјРёРЅР°',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       enabled
-                          ? 'Текущая дата: ${AppDateFormatter.shortDate(effectiveDate)}. Можно откатиться в прошлое и вручную менять баланс, чтобы проверить аналитику дохода.'
-                          : 'Включите режим, чтобы менять текущую дату и вручную добавлять или убирать деньги со счета.',
+                          ? 'РўРµРєСѓС‰Р°СЏ РґР°С‚Р°: ${AppDateFormatter.shortDate(effectiveDate)}. РњРѕР¶РЅРѕ РѕС‚РєР°С‚РёС‚СЊСЃСЏ РІ РїСЂРѕС€Р»РѕРµ Рё РІСЂСѓС‡РЅСѓСЋ РјРµРЅСЏС‚СЊ Р±Р°Р»Р°РЅСЃ, С‡С‚РѕР±С‹ РїСЂРѕРІРµСЂРёС‚СЊ Р°РЅР°Р»РёС‚РёРєСѓ РґРѕС…РѕРґР°.'
+                          : 'Р’РєР»СЋС‡РёС‚Рµ СЂРµР¶РёРј, С‡С‚РѕР±С‹ РјРµРЅСЏС‚СЊ С‚РµРєСѓС‰СѓСЋ РґР°С‚Сѓ Рё РІСЂСѓС‡РЅСѓСЋ РґРѕР±Р°РІР»СЏС‚СЊ РёР»Рё СѓР±РёСЂР°С‚СЊ РґРµРЅСЊРіРё СЃРѕ СЃС‡РµС‚Р°.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.secondaryText,
                         height: 1.4,
@@ -181,7 +181,7 @@ class _AdminModeCard extends StatelessWidget {
                 onPressed: isBusy ? null : onOpen,
                 icon: const Icon(Icons.tune_rounded),
                 label: Text(
-                  isBusy ? 'Применение...' : 'Изменить дату и баланс',
+                  isBusy ? 'РџСЂРёРјРµРЅРµРЅРёРµ...' : 'РР·РјРµРЅРёС‚СЊ РґР°С‚Сѓ Рё Р±Р°Р»Р°РЅСЃ',
                 ),
               ),
             ),
@@ -208,9 +208,12 @@ class _DailySafeToSaveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nextIncomeLabel = preview.nextIncomeDate == null
-        ? 'Дата дохода пока не определена'
-        : 'Следующий доход: ${AppDateFormatter.shortDate(preview.nextIncomeDate!)}';
+        ? 'Р”Р°С‚Р° РґРѕС…РѕРґР° РїРѕРєР° РЅРµ РѕРїСЂРµРґРµР»РµРЅР°'
+        : 'РЎР»РµРґСѓСЋС‰РёР№ РґРѕС…РѕРґ: ${AppDateFormatter.shortDate(preview.nextIncomeDate!)}';
     final statusText = _statusLabel(preview);
+    final safeBalanceLabel = preview.safeBalance < 0
+        ? 'Ожидаемый дефицит'
+        : 'Свободный остаток';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -228,7 +231,7 @@ class _DailySafeToSaveCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Ежедневный Safe-to-Save',
+                      'Р•Р¶РµРґРЅРµРІРЅС‹Р№ Safe-to-Save',
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
@@ -253,8 +256,8 @@ class _DailySafeToSaveCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             preview.suggestedAmount > 0
-                ? 'Сегодня можно отложить ${SomFormatter.amount(preview.suggestedAmount)}'
-                : 'Сегодня безопасный перевод в накопления не рекомендован',
+                ? 'РЎРµРіРѕРґРЅСЏ РјРѕР¶РЅРѕ РѕС‚Р»РѕР¶РёС‚СЊ ${SomFormatter.amount(preview.suggestedAmount)}'
+                : 'РЎРµРіРѕРґРЅСЏ Р±РµР·РѕРїР°СЃРЅС‹Р№ РїРµСЂРµРІРѕРґ РІ РЅР°РєРѕРїР»РµРЅРёСЏ РЅРµ СЂРµРєРѕРјРµРЅРґРѕРІР°РЅ',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               color: preview.suggestedAmount > 0
                   ? AppTheme.accent
@@ -282,19 +285,19 @@ class _DailySafeToSaveCard extends StatelessWidget {
               runSpacing: 10,
               children: <Widget>[
                 _MetricChip(
-                  label: 'Текущий баланс',
+                  label: 'РўРµРєСѓС‰РёР№ Р±Р°Р»Р°РЅСЃ',
                   value: SomFormatter.amount(preview.currentBalance),
                 ),
                 _MetricChip(
-                  label: 'Платежи до дохода',
+                  label: 'РџР»Р°С‚РµР¶Рё РґРѕ РґРѕС…РѕРґР°',
                   value: SomFormatter.amount(preview.requiredPayments),
                 ),
                 _MetricChip(
-                  label: 'Буфер на жизнь',
+                  label: 'Р‘СѓС„РµСЂ РЅР° Р¶РёР·РЅСЊ',
                   value: SomFormatter.amount(preview.lifeBuffer),
                 ),
                 _MetricChip(
-                  label: 'Безопасный остаток',
+                  label: safeBalanceLabel,
                   value: SomFormatter.amount(preview.safeBalance),
                 ),
               ],
@@ -307,12 +310,12 @@ class _DailySafeToSaveCard extends StatelessWidget {
 
   String _statusLabel(DailySafeToSaveModel preview) {
     if (!preview.enabled) {
-      return 'Функция недоступна для текущего сценария.';
+      return 'Р¤СѓРЅРєС†РёСЏ РЅРµРґРѕСЃС‚СѓРїРЅР° РґР»СЏ С‚РµРєСѓС‰РµРіРѕ СЃС†РµРЅР°СЂРёСЏ.';
     }
     if (preview.daysToNextIncome > 0) {
-      return 'До следующего дохода ${preview.daysToNextIncome} дн. Статус: ${preview.status}.';
+      return 'Р”Рѕ СЃР»РµРґСѓСЋС‰РµРіРѕ РґРѕС…РѕРґР° ${preview.daysToNextIncome} РґРЅ. РЎС‚Р°С‚СѓСЃ: ${preview.status}.';
     }
-    return 'Статус на сегодня: ${preview.status}.';
+    return 'РЎС‚Р°С‚СѓСЃ РЅР° СЃРµРіРѕРґРЅСЏ: ${preview.status}.';
   }
 }
 
@@ -387,14 +390,14 @@ class _MonthAnalysisCard extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             _MetricRow(
-              label: 'Поступления',
+              label: 'РџРѕСЃС‚СѓРїР»РµРЅРёСЏ',
               amount: summary.income,
               color: const Color(0xFF4CAF50),
               prefix: '+',
             ),
             const SizedBox(height: 14),
             _MetricRow(
-              label: 'Расходы',
+              label: 'Р Р°СЃС…РѕРґС‹',
               amount: summary.expenses,
               color: const Color(0xFFE57373),
               prefix: '-',
@@ -475,32 +478,32 @@ class _BreakdownCard extends StatelessWidget {
         children: <Widget>[
           AnalysisCategoryRow(
             color: AppTheme.accent,
-            title: 'Поступления',
+            title: 'РџРѕСЃС‚СѓРїР»РµРЅРёСЏ',
             amount: summary.income,
             highlight: true,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.blue,
-            title: 'Оплата по QR',
+            title: 'РћРїР»Р°С‚Р° РїРѕ QR',
             amount: summary.qr,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.accent,
-            title: 'Переводы',
+            title: 'РџРµСЂРµРІРѕРґС‹',
             amount: summary.transfers,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.yellow,
-            title: 'Покупки',
+            title: 'РџРѕРєСѓРїРєРё',
             amount: summary.shopping,
           ),
           const Divider(color: Color(0xFF2A2A2E), height: 1),
           AnalysisCategoryRow(
             color: AppTheme.coral,
-            title: 'Рестораны',
+            title: 'Р РµСЃС‚РѕСЂР°РЅС‹',
             amount: summary.restaurants,
           ),
         ],
