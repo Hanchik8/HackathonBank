@@ -59,6 +59,10 @@ public class SmartCategory {
         return plannedMonthly;
     }
 
+    public void setPlannedMonthly(BigDecimal plannedMonthly) {
+        this.plannedMonthly = plannedMonthly;
+    }
+
     public boolean isFavorite() {
         return favorite;
     }

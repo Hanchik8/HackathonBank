@@ -232,12 +232,27 @@ class _TransactionCaptureSheetState extends State<TransactionCaptureSheet> {
                     ...widget.smartCategories.map(
                       (category) => DropdownMenuItem<String?>(
                         value: category.id,
-                        child: Text(category.name),
+                        child: _SmartCategoryMenuItem(category: category),
                       ),
                     ),
                   ],
                   onChanged: (value) => setState(() => _smartCategoryId = value),
                 ),
+                if (_selectedSmartCategory != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Остаток по лимиту: ${_formatRemaining(_selectedSmartCategory!)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _selectedSmartCategory!.remaining < 0
+                            ? AppTheme.coral
+                            : AppTheme.secondaryText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ],
               const SizedBox(height: 20),
               SizedBox(
@@ -296,6 +311,23 @@ class _TransactionCaptureSheetState extends State<TransactionCaptureSheet> {
       _ => name,
     };
   }
+
+  SmartCategory? get _selectedSmartCategory {
+    if (_smartCategoryId == null) {
+      return null;
+    }
+    for (final category in widget.smartCategories) {
+      if (category.id == _smartCategoryId) {
+        return category;
+      }
+    }
+    return null;
+  }
+
+  String _formatRemaining(SmartCategory category) {
+    final absolute = SomFormatter.amount(category.remaining.abs());
+    return category.remaining < 0 ? '-$absolute' : absolute;
+  }
 }
 
 class _OptionChip extends StatelessWidget {
@@ -331,5 +363,41 @@ class _OptionChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SmartCategoryMenuItem extends StatelessWidget {
+  const _SmartCategoryMenuItem({required this.category});
+
+  final SmartCategory category;
+
+  @override
+  Widget build(BuildContext context) {
+    final remainingColor = category.remaining < 0
+        ? AppTheme.coral
+        : AppTheme.secondaryText;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            category.name,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          _format(category.remaining),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: remainingColor,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _format(double remaining) {
+    final absolute = SomFormatter.amount(remaining.abs());
+    return remaining < 0 ? '-$absolute' : absolute;
   }
 }

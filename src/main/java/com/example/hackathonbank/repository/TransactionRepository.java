@@ -20,7 +20,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
     @Query("SELECT t FROM Transaction t LEFT JOIN FETCH t.account LEFT JOIN FETCH t.smartCategory WHERE t.user.id = :userId AND t.occurredAt BETWEEN :start AND :end ORDER BY t.occurredAt DESC")
     List<Transaction> findByUserIdWithRelationsBetween(@Param("userId") Long userId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
-    List<Transaction> findByUserIdOrderByOccurredAtDesc(Long userId);
+    @Query("""
+            select t from Transaction t
+            left join fetch t.account
+            left join fetch t.smartCategory
+            where t.user.id = :userId
+              and t.status = :status
+            order by t.occurredAt desc
+            """)
+    List<Transaction> findByUserIdAndStatusOrderByOccurredAtDesc(@Param("userId") Long userId,
+                                                                 @Param("status") TransactionStatus status);
 
     List<Transaction> findByUserIdAndStatusAndOccurredAtBetweenOrderByOccurredAtDesc(Long userId,
                                                                                      TransactionStatus status,
@@ -44,6 +53,17 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
                                                                                                    @Param("windowEnd") LocalDateTime windowEnd);
 
     List<Transaction> findByUserIdAndSmartCategoryId(Long userId, Long smartCategoryId);
+
+    @Query("""
+            select t from Transaction t
+            left join fetch t.account
+            left join fetch t.smartCategory
+            where t.user.id = :userId
+              and t.id in :transactionIds
+            order by t.occurredAt desc
+            """)
+    List<Transaction> findByUserIdAndIdIn(@Param("userId") Long userId,
+                                          @Param("transactionIds") List<Long> transactionIds);
 
     Optional<Transaction> findByScheduledPaymentId(Long scheduledPaymentId);
 

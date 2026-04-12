@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hackathon_bank_mobile/screens/ai_dashboard_screen.dart';
 import 'package:hackathon_bank_mobile/services/bank_api_dashboard_repository.dart';
 import 'package:hackathon_bank_mobile/theme/app_theme.dart';
+import 'package:m_bank_dashboard/m_bank_dashboard.dart';
 import 'package:m_bank_dashboard/src/widgets/action_circle_button.dart';
 import 'package:m_bank_dashboard/src/widgets/transaction_capture_sheet.dart';
 
@@ -169,5 +169,73 @@ void main() {
 
     expect(apiService.simulateDayCalls, 1);
     expect(find.byType(SnackBar), findsOneWidget);
+  });
+
+  testWidgets('dashboard shows deficit label when safe balance is negative', (
+    WidgetTester tester,
+  ) async {
+    final apiService = FakeBankApiService(
+      accounts: const <AccountModel>[
+        AccountModel(
+          id: 1,
+          name: 'Main',
+          type: 'MAIN',
+          balance: 1000,
+          currency: 'KGS',
+        ),
+        AccountModel(
+          id: 2,
+          name: 'Savings',
+          type: 'SAVINGS',
+          balance: 50000,
+          currency: 'KGS',
+        ),
+      ],
+      dashboard: sampleDashboard([]),
+    );
+    final repository = BankApiDashboardRepository(apiService: apiService);
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: AiDashboardScreen(
+            repository: repository,
+            refreshSignal: 0,
+            onDataChanged: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ожидаемый дефицит', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('dashboard shows free balance label when safe balance is positive', (
+    WidgetTester tester,
+  ) async {
+    final apiService = FakeBankApiService(dashboard: sampleDashboard([]));
+    final repository = BankApiDashboardRepository(apiService: apiService);
+
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: AiDashboardScreen(
+            repository: repository,
+            refreshSignal: 0,
+            onDataChanged: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Свободный остаток', skipOffstage: false), findsOneWidget);
   });
 }

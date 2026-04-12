@@ -6,6 +6,7 @@ import 'package:m_bank_dashboard/m_bank_dashboard.dart'
 
 import '../models/account_model.dart';
 import '../models/ai_analysis_model.dart';
+import '../models/ai_chat_reply_model.dart';
 import '../models/ai_dashboard_model.dart';
 import '../models/smart_category_model.dart';
 import '../models/transaction_model.dart';
@@ -76,7 +77,7 @@ class BankApiService {
     return AiAnalysisModel.fromJson(json);
   }
 
-  Future<Map<String, String>> sendAiChatMessage({
+  Future<AiChatReplyModel> sendAiChatMessage({
     required List<Map<String, String>> history,
     required String newMessage,
   }) async {
@@ -89,11 +90,7 @@ class BankApiService {
               },
             )
             as Map<String, dynamic>;
-    final message = json['message'] as Map<String, dynamic>? ?? const {};
-    return <String, String>{
-      'role': message['role'] as String? ?? 'assistant',
-      'content': message['content'] as String? ?? '',
-    };
+    return AiChatReplyModel.fromJson(json);
   }
 
   Future<List<Map<String, String>>> fetchAiChatHistory() async {
@@ -108,6 +105,22 @@ class BankApiService {
         'content': message['content'] as String? ?? '',
       };
     }).toList(growable: false);
+  }
+
+  Future<AiChatReplyModel> resolveAiChatAction({
+    required String token,
+    required bool confirmed,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/ai/chat/action',
+              body: <String, dynamic>{
+                'token': token,
+                'confirmed': confirmed,
+              },
+            )
+            as Map<String, dynamic>;
+    return AiChatReplyModel.fromJson(json);
   }
 
   Future<AiExecutionModel> executeAction(String actionToken) async {
@@ -275,6 +288,32 @@ class BankApiService {
     await _apiClient.postJson(
       '/smart-categories/$categoryId/delete',
       body: <String, dynamic>{},
+    );
+  }
+
+  Future<SmartCategory> updateSmartCategoryLimit({
+    required String categoryId,
+    required double plannedMonthly,
+  }) async {
+    final json =
+        await _apiClient.postJson(
+              '/smart-categories/$categoryId/limit',
+              body: <String, dynamic>{'plannedMonthly': plannedMonthly},
+            )
+            as Map<String, dynamic>;
+    return SmartCategory.fromJson(json);
+  }
+
+  Future<void> bulkCategorizeTransactions({
+    required List<int> transactionIds,
+    String? categoryId,
+  }) async {
+    await _apiClient.putJson(
+      '/transactions/bulk-categorize',
+      body: <String, dynamic>{
+        'transactionIds': transactionIds,
+        'categoryId': categoryId,
+      },
     );
   }
 

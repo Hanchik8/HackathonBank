@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/ai_dashboard_model.dart';
@@ -44,7 +45,8 @@ class DetailedAnalyticsScreen extends StatefulWidget {
 
 class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     with SingleTickerProviderStateMixin {
-  static const _chartAnimationDuration = Duration(milliseconds: 600);
+  static Duration get _chartAnimationDuration =>
+      kIsWeb ? Duration.zero : const Duration(milliseconds: 600);
 
   late final AnimationController _animationController;
   late final CurvedAnimation _chartAnimation;
@@ -68,7 +70,11 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
       parent: _animationController,
       curve: Curves.easeInOut,
     );
-    _animationController.forward();
+    if (kIsWeb) {
+      _animationController.value = 1;
+    } else {
+      _animationController.forward();
+    }
     _recomputeAnalytics();
   }
 
@@ -256,60 +262,60 @@ class _DetailedAnalyticsScreenState extends State<DetailedAnalyticsScreen>
     required Widget child,
     Widget? footer,
   }) {
+    const borderRadius = BorderRadius.all(Radius.circular(24));
+    final cardContent = Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.surface.withValues(alpha: 0.9),
+        borderRadius: borderRadius,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppTheme.secondaryText,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          child,
+          if (footer != null) ...<Widget>[const SizedBox(height: 18), footer],
+        ],
+      ),
+    );
+    if (kIsWeb) {
+      return ClipRRect(borderRadius: borderRadius, child: cardContent);
+    }
     return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: borderRadius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.surface.withValues(alpha: 0.9),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppTheme.secondaryText,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 18),
-              child,
-              if (footer != null) ...<Widget>[
-                const SizedBox(height: 18),
-                footer,
-              ],
-            ],
-          ),
-        ),
+        child: cardContent,
       ),
     );
   }
 
   Widget _animatedChart(Widget chart) {
-    return FadeTransition(
-      opacity: _chartAnimation,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final targetHeight = (constraints.maxWidth * 0.65).clamp(
-            200.0,
-            320.0,
-          );
-          return SizedBox(height: targetHeight, child: chart);
-        },
-      ),
+    final content = LayoutBuilder(
+      builder: (context, constraints) {
+        final targetHeight = (constraints.maxWidth * 0.65).clamp(200.0, 320.0);
+        return SizedBox(height: targetHeight, child: chart);
+      },
     );
+    if (kIsWeb) {
+      return content;
+    }
+    return FadeTransition(opacity: _chartAnimation, child: content);
   }
 
   List<_MonthlyBucket> _buildMonthlyBuckets() => List<_MonthlyBucket>.generate(

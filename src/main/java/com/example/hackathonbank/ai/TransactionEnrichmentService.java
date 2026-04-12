@@ -58,6 +58,12 @@ public class TransactionEnrichmentService {
                 log.warn("Live AI enrichment failed, using fallback mode: {}", exception.getMessage());
             }
         }
+        return enrichDeterministic(transactions, scheduledPayments, minimumProjectedBalance);
+    }
+
+    public EnrichmentSummary enrichDeterministic(List<Transaction> transactions,
+                                                 List<ScheduledPayment> scheduledPayments,
+                                                 BigDecimal minimumProjectedBalance) {
         return fallbackEnrichment(transactions, scheduledPayments, minimumProjectedBalance);
     }
 

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/scheduled_payment_model.dart';
@@ -24,6 +25,13 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   late final BankApiService _apiService;
   late final BankApiDashboardRepository _dashboardRepository;
+  late Widget _homeScreen;
+  late Widget _analysisScreen;
+  late Widget _transfersScreen;
+  static const Widget _moreScreen = PlaceholderScreen(
+    title: 'Еще',
+    subtitle: 'Здесь позже можно разместить настройки, уведомления и профиль.',
+  );
 
   int _currentIndex = 0;
   int _refreshSignal = 0;
@@ -40,6 +48,7 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _apiService = widget.apiService ?? BankApiService();
     _dashboardRepository = BankApiDashboardRepository(apiService: _apiService);
+    _rebuildCachedScreens();
     _refreshFavoriteCategories();
     _refreshDuePaymentBanner();
   }
@@ -47,9 +56,43 @@ class _AppShellState extends State<AppShell> {
   void _handleDataChanged() {
     setState(() {
       _refreshSignal++;
+      _rebuildCachedScreens();
     });
     _refreshFavoriteCategories();
     _refreshDuePaymentBanner(resetDismissal: true);
+  }
+
+  void _rebuildCachedScreens() {
+    _rebuildHomeScreen();
+    _rebuildAnalysisScreen();
+    _rebuildTransfersScreen();
+  }
+
+  void _rebuildHomeScreen() {
+    _homeScreen = HomeScreen(
+      apiService: _apiService,
+      refreshSignal: _refreshSignal,
+      onDataChanged: _handleDataChanged,
+    );
+  }
+
+  void _rebuildAnalysisScreen() {
+    _analysisScreen = AiDashboardScreen(
+      repository: _dashboardRepository,
+      refreshSignal: _refreshSignal,
+      onDataChanged: _handleDataChanged,
+    );
+  }
+
+  void _rebuildTransfersScreen() {
+    _transfersScreen = TransfersScreen(
+      apiService: _apiService,
+      refreshSignal: _refreshSignal,
+      onDataChanged: _handleDataChanged,
+      preferredMode: _preferredTransferMode,
+      preferredSmartCategoryId: _preferredSmartCategoryId,
+      quickCategorySignal: _quickCategorySignal,
+    );
   }
 
   Future<void> _refreshFavoriteCategories() async {
@@ -59,9 +102,14 @@ class _AppShellState extends State<AppShell> {
         if (!mounted) {
           return;
         }
+        if (_favoriteSmartCategories.isEmpty &&
+            _preferredSmartCategoryId == null) {
+          return;
+        }
         setState(() {
           _favoriteSmartCategories = const <SmartCategory>[];
           _preferredSmartCategoryId = null;
+          _rebuildTransfersScreen();
         });
         return;
       }
@@ -74,16 +122,26 @@ class _AppShellState extends State<AppShell> {
           .where((category) => category.isFavorite)
           .take(3)
           .toList(growable: false);
-      final hasPreferred = _preferredSmartCategoryId != null &&
+      final hasPreferred =
+          _preferredSmartCategoryId != null &&
           favorites.any((category) => category.id == _preferredSmartCategoryId);
+      final nextPreferredSmartCategoryId = hasPreferred
+          ? _preferredSmartCategoryId
+          : null;
+      if (_sameFavoriteCategories(_favoriteSmartCategories, favorites) &&
+          _preferredSmartCategoryId == nextPreferredSmartCategoryId) {
+        return;
+      }
       setState(() {
         _favoriteSmartCategories = favorites;
-        if (!hasPreferred) {
-          _preferredSmartCategoryId = null;
-        }
+        _preferredSmartCategoryId = nextPreferredSmartCategoryId;
+        _rebuildTransfersScreen();
       });
     } catch (error) {
       if (!mounted) {
+        return;
+      }
+      if (_favoriteSmartCategories.isEmpty) {
         return;
       }
       setState(() {
@@ -125,11 +183,16 @@ class _AppShellState extends State<AppShell> {
     List<ScheduledPaymentModel> payments, {
     required bool resetDismissal,
   }) {
+    final nextDismissed = (resetDismissal || payments.isEmpty)
+        ? false
+        : _isDueBannerDismissed;
+    if (_sameScheduledPayments(_dueTodayPayments, payments) &&
+        _isDueBannerDismissed == nextDismissed) {
+      return;
+    }
     setState(() {
       _dueTodayPayments = payments;
-      if (resetDismissal || payments.isEmpty) {
-        _isDueBannerDismissed = false;
-      }
+      _isDueBannerDismissed = nextDismissed;
     });
   }
 
@@ -143,6 +206,7 @@ class _AppShellState extends State<AppShell> {
       _preferredSmartCategoryId = smartCategoryId;
       _quickCategorySignal++;
       _currentIndex = 2;
+      _rebuildTransfersScreen();
     });
 
     final message = selectedCategory == null
@@ -153,35 +217,24 @@ class _AppShellState extends State<AppShell> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Widget _buildCurrentScreen() {
+    switch (_currentIndex) {
+      case 0:
+        return _homeScreen;
+      case 1:
+        return _analysisScreen;
+      case 2:
+        return _transfersScreen;
+      case 3:
+      default:
+        return _moreScreen;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final showDueBanner =
         _dueTodayPayments.isNotEmpty && !_isDueBannerDismissed;
-    final screens = <Widget>[
-      HomeScreen(
-        apiService: _apiService,
-        refreshSignal: _refreshSignal,
-        onDataChanged: _handleDataChanged,
-      ),
-      AiDashboardScreen(
-        repository: _dashboardRepository,
-        refreshSignal: _refreshSignal,
-        onDataChanged: _handleDataChanged,
-      ),
-      TransfersScreen(
-        apiService: _apiService,
-        refreshSignal: _refreshSignal,
-        onDataChanged: _handleDataChanged,
-        preferredMode: _preferredTransferMode,
-        preferredSmartCategoryId: _preferredSmartCategoryId,
-        quickCategorySignal: _quickCategorySignal,
-      ),
-      const PlaceholderScreen(
-        title: 'Еще',
-        subtitle:
-            'Здесь позже можно разместить настройки, уведомления и профиль.',
-      ),
-    ];
 
     return Scaffold(
       body: DecoratedBox(
@@ -198,22 +251,24 @@ class _AppShellState extends State<AppShell> {
         ),
         child: Stack(
           children: <Widget>[
-            Positioned(
-              top: -110,
-              right: -70,
-              child: _GlowOrb(
-                color: AppTheme.accent.withValues(alpha: 0.08),
-                size: 250,
+            if (!kIsWeb) ...<Widget>[
+              Positioned(
+                top: -110,
+                right: -70,
+                child: _GlowOrb(
+                  color: AppTheme.accent.withValues(alpha: 0.08),
+                  size: 250,
+                ),
               ),
-            ),
-            Positioned(
-              top: 280,
-              left: -60,
-              child: _GlowOrb(
-                color: AppTheme.blue.withValues(alpha: 0.07),
-                size: 200,
+              Positioned(
+                top: 280,
+                left: -60,
+                child: _GlowOrb(
+                  color: AppTheme.blue.withValues(alpha: 0.07),
+                  size: 200,
+                ),
               ),
-            ),
+            ],
             SafeArea(
               bottom: false,
               child: Column(
@@ -224,14 +279,11 @@ class _AppShellState extends State<AppShell> {
                       child: DuePaymentBanner(
                         payments: _dueTodayPayments,
                         onOpenAnalysis: () => setState(() => _currentIndex = 1),
-                        onDismiss: () => setState(
-                          () => _isDueBannerDismissed = true,
-                        ),
+                        onDismiss: () =>
+                            setState(() => _isDueBannerDismissed = true),
                       ),
                     ),
-                  Expanded(
-                    child: IndexedStack(index: _currentIndex, children: screens),
-                  ),
+                  Expanded(child: _buildCurrentScreen()),
                 ],
               ),
             ),
@@ -431,7 +483,8 @@ class _QrActionButtonState extends State<_QrActionButton> {
   void _showOverlay() {
     _removeOverlay();
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
-    final renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _buttonKey.currentContext?.findRenderObject() as RenderBox?;
     if (overlay == null || renderBox == null) {
       return;
     }
@@ -731,6 +784,52 @@ class _GlowOrb extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _sameFavoriteCategories(
+  List<SmartCategory> left,
+  List<SmartCategory> right,
+) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    final leftCategory = left[index];
+    final rightCategory = right[index];
+    if (leftCategory.id != rightCategory.id ||
+        leftCategory.remaining != rightCategory.remaining ||
+        leftCategory.plannedMonthly != rightCategory.plannedMonthly ||
+        leftCategory.isFavorite != rightCategory.isFavorite) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameScheduledPayments(
+  List<ScheduledPaymentModel> left,
+  List<ScheduledPaymentModel> right,
+) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    final leftPayment = left[index];
+    final rightPayment = right[index];
+    if (leftPayment.id != rightPayment.id ||
+        leftPayment.amount != rightPayment.amount ||
+        leftPayment.status != rightPayment.status ||
+        leftPayment.dueDate != rightPayment.dueDate) {
+      return false;
+    }
+  }
+  return true;
 }
 
 int _daysUntilEndOfMonthFrom(DateTime date) {

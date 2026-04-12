@@ -43,6 +43,17 @@ class ApiClient {
     return _decodeResponse(response);
   }
 
+  Future<dynamic> putJson(String path, {Object? body}) async {
+    final response = await _httpClient
+        .put(
+          Uri.parse('$baseUrl$path'),
+          headers: <String, String>{'Content-Type': 'application/json'},
+          body: body == null ? null : jsonEncode(body),
+        )
+        .timeout(_requestTimeout);
+    return _decodeResponse(response);
+  }
+
   dynamic _decodeResponse(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(response.statusCode, _extractErrorMessage(response));

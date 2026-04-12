@@ -35,7 +35,7 @@ class SmartCategoryControllerIntegrationTests {
 
     @Test
     void linkTransactionCreatesSmartCategoryAndAttachesExpense() throws Exception {
-        var transaction = transactionRepository.findByUserIdOrderByOccurredAtDesc(1L).stream()
+        var transaction = transactionRepository.findByUserIdWithRelationsOrderByOccurredAtDesc(1L).stream()
                 .filter(item -> item.getStatus() == TransactionStatus.COMPLETED)
                 .filter(item -> item.getAmount().signum() < 0)
                 .findFirst()

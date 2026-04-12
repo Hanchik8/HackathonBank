@@ -11,6 +11,7 @@ class NotificationModel {
     this.amount,
     this.transactionId,
     this.smartCategoryHint,
+    this.smartCategoryId,
   });
 
   final String id;
@@ -22,9 +23,13 @@ class NotificationModel {
   final NotificationType type;
   final int? transactionId;
   final String? smartCategoryHint;
+  final String? smartCategoryId;
 
   bool get canAddToSmartList =>
-      transactionId != null && (amount ?? 0) < 0 && type == NotificationType.debit;
+      transactionId != null &&
+      smartCategoryId == null &&
+      (amount ?? 0) < 0 &&
+      type == NotificationType.debit;
 
   NotificationModel copyWith({
     String? id,
@@ -36,6 +41,7 @@ class NotificationModel {
     NotificationType? type,
     int? transactionId,
     String? smartCategoryHint,
+    String? smartCategoryId,
   }) {
     return NotificationModel(
       id: id ?? this.id,
@@ -47,6 +53,7 @@ class NotificationModel {
       type: type ?? this.type,
       transactionId: transactionId ?? this.transactionId,
       smartCategoryHint: smartCategoryHint ?? this.smartCategoryHint,
+      smartCategoryId: smartCategoryId ?? this.smartCategoryId,
     );
   }
 
@@ -63,6 +70,7 @@ class NotificationModel {
       type: _notificationTypeFromJson(json['type'] as String?),
       transactionId: json['transactionId'] as int?,
       smartCategoryHint: json['smartCategoryHint'] as String?,
+      smartCategoryId: json['smartCategoryId']?.toString(),
     );
   }
 
@@ -77,6 +85,7 @@ class NotificationModel {
       'type': type.name,
       'transactionId': transactionId,
       'smartCategoryHint': smartCategoryHint,
+      'smartCategoryId': smartCategoryId,
     };
   }
 

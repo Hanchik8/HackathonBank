@@ -1,5 +1,6 @@
 package com.example.hackathonbank.controller;
 
+import com.example.hackathonbank.dto.AiChatActionRequest;
 import com.example.hackathonbank.dto.AiChatRequest;
 import com.example.hackathonbank.dto.AiChatResponse;
 import com.example.hackathonbank.dto.ChatMessageDto;
@@ -31,5 +32,10 @@ public class AiChatController {
     @PostMapping("/chat")
     public AiChatResponse chat(@Valid @RequestBody AiChatRequest request) {
         return aiChatService.chat(request);
+    }
+
+    @PostMapping("/chat/action")
+    public AiChatResponse resolveAction(@Valid @RequestBody AiChatActionRequest request) {
+        return aiChatService.resolveAction(request);
     }
 }

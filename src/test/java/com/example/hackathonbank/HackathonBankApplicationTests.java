@@ -58,16 +58,29 @@ class HackathonBankApplicationTests {
 
     @Test
     void transactionsEndpointReturnsSeededOperations() throws Exception {
-        mockMvc.perform(get("/api/v1/transactions"))
+        String body = mockMvc.perform(get("/api/v1/transactions"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(48))
-                .andExpect(jsonPath("$[0].status").value("SCHEDULED"));
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode transactions = objectMapper.readTree(body);
+        assertThat(transactions.size()).isGreaterThan(40);
+
+        BigDecimal visibleNet = BigDecimal.ZERO;
+        for (JsonNode transaction : transactions) {
+            assertThat(transaction.get("status").asText()).isEqualTo("COMPLETED");
+            visibleNet = visibleNet.add(transaction.get("amount").decimalValue());
+        }
+
+        assertThat(new BigDecimal("20000.00").add(visibleNet)).isEqualByComparingTo("15000.00");
     }
 
     @Test
     void transferEndpointMovesMoneyAndCreatesLedgerEntries() throws Exception {
         var mainAccount = accountRepository.findByUserIdAndType(1L, AccountType.MAIN).orElseThrow();
         var savingsAccount = accountRepository.findByUserIdAndType(1L, AccountType.SAVINGS).orElseThrow();
+        int seededTransactions = transactionRepository.findByUserIdWithRelationsOrderByOccurredAtDesc(1L).size();
 
         mockMvc.perform(post("/api/v1/transfer")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -82,7 +95,7 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.fromAccount.balance").value(45000.00))
                 .andExpect(jsonPath("$.toAccount.balance").value(20000.00));
 
-        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L)).hasSize(50);
+        assertThat(transactionRepository.findByUserIdWithRelationsOrderByOccurredAtDesc(1L)).hasSize(seededTransactions + 2);
     }
 
     @Test
@@ -150,7 +163,7 @@ class HackathonBankApplicationTests {
                 .andExpect(jsonPath("$.iconKey").value("subscription"))
                 .andExpect(jsonPath("$.status").value("SCHEDULED"));
 
-        assertThat(transactionRepository.findByUserIdOrderByOccurredAtDesc(1L))
+        assertThat(transactionRepository.findByUserIdWithRelationsOrderByOccurredAtDesc(1L))
                 .extracting(transaction -> transaction.getTitle())
                 .contains("Автоплатеж: Интернет");
     }

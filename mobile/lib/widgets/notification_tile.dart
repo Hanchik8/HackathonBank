@@ -10,32 +10,46 @@ class NotificationTile extends StatelessWidget {
     super.key,
     required this.notification,
     this.onTap,
+    this.onLongPress,
     this.onAddToSmartList,
+    this.selected = false,
+    this.selectionMode = false,
   });
 
   final NotificationModel notification;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onAddToSmartList;
+  final bool selected;
+  final bool selectionMode;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
     final palette = _paletteFor(notification.type);
     final amountLabel = _amountLabel(notification.amount);
-    final hasAction = onAddToSmartList != null;
+    final hasAction = onAddToSmartList != null && !selectionMode;
+    final backgroundColor = selected
+        ? palette.color.withValues(alpha: 0.14)
+        : notification.isRead
+        ? AppTheme.surface
+        : AppTheme.surfaceSoft;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(22),
         child: Ink(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: notification.isRead ? AppTheme.surface : AppTheme.surfaceSoft,
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: notification.isRead
+              color: selected
+                  ? palette.color.withValues(alpha: 0.55)
+                  : notification.isRead
                   ? Colors.white10
                   : palette.color.withValues(alpha: 0.22),
             ),
@@ -76,6 +90,15 @@ class NotificationTile extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: palette.color,
                               shape: BoxShape.circle,
+                            ),
+                          ),
+                        if (selected)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1, left: 8),
+                            child: Icon(
+                              Icons.check_circle_rounded,
+                              size: 18,
+                              color: palette.color,
                             ),
                           ),
                       ],

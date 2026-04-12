@@ -5,6 +5,7 @@ import '../models/notification_model.dart';
 import '../services/bank_api_service.dart';
 import '../services/mock_notifications.dart';
 import '../theme/app_theme.dart';
+import '../theme/som_formatter.dart';
 import '../widgets/notification_tile.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -27,66 +28,127 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   late List<NotificationModel> _notifications;
-  String? _savingNotificationId;
+  final Set<int> _selectedTransactionIds = <int>{};
+  bool _isSaving = false;
+
+  bool get _isSelectionMode => _selectedTransactionIds.isNotEmpty;
 
   @override
   void initState() {
     super.initState();
-    _notifications = List<NotificationModel>.from(
-      widget.notifications ?? getMockNotifications(transactions: widget.transactions),
-    )..sort((left, right) => right.timestamp.compareTo(left.timestamp));
+    _notifications = _buildNotifications(
+      widget.notifications,
+      widget.transactions,
+    );
   }
 
-  Future<void> _openSmartList(NotificationModel notification) async {
-    if (!notification.canAddToSmartList ||
-        notification.transactionId == null ||
-        _savingNotificationId != null) {
+  Future<void> _reloadNotifications() async {
+    final transactions = await widget.apiService.fetchTransactions();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _notifications = _buildNotifications(null, transactions);
+      _selectedTransactionIds.clear();
+    });
+  }
+
+  Future<void> _handleTap(NotificationModel notification) async {
+    if (!notification.canAddToSmartList || notification.transactionId == null) {
+      return;
+    }
+    if (_isSelectionMode) {
+      _toggleSelection(notification);
+      return;
+    }
+    await _assignTransactions(
+      transactionIds: <int>[notification.transactionId!],
+      title: 'Привязать расход к категории',
+    );
+  }
+
+  void _handleLongPress(NotificationModel notification) {
+    if (!notification.canAddToSmartList || notification.transactionId == null) {
+      return;
+    }
+    setState(() {
+      _selectedTransactionIds.add(notification.transactionId!);
+    });
+  }
+
+  void _toggleSelection(NotificationModel notification) {
+    final transactionId = notification.transactionId;
+    if (transactionId == null || !notification.canAddToSmartList) {
+      return;
+    }
+    setState(() {
+      if (_selectedTransactionIds.contains(transactionId)) {
+        _selectedTransactionIds.remove(transactionId);
+      } else {
+        _selectedTransactionIds.add(transactionId);
+      }
+    });
+  }
+
+  Future<void> _assignSelectedTransactions() async {
+    if (_selectedTransactionIds.isEmpty) {
+      return;
+    }
+    await _assignTransactions(
+      transactionIds: _selectedTransactionIds.toList(growable: false),
+      title: 'Выберите Smart List категорию',
+    );
+  }
+
+  Future<void> _assignTransactions({
+    required List<int> transactionIds,
+    required String title,
+  }) async {
+    if (_isSaving) {
       return;
     }
 
-    final draft = await showModalBottomSheet<SmartCategoryDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => SmartCategoryFormSheet(
-        initialName: notification.smartCategoryHint ?? notification.title,
-        initialPlannedMonthly: notification.amount?.abs(),
-        title: '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0440\u0430\u0441\u0445\u043e\u0434 \u0432 Smart List',
-        submitLabel: '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c',
-      ),
-    );
+    final categories = await widget.apiService.fetchSmartCategories();
+    if (!mounted) {
+      return;
+    }
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сначала создайте хотя бы одну Smart List категорию.'),
+        ),
+      );
+      return;
+    }
 
-    if (draft == null) {
+    final category = await _pickCategory(categories, title);
+    if (!mounted || category == null) {
       return;
     }
 
     setState(() {
-      _savingNotificationId = notification.id;
+      _isSaving = true;
     });
 
     try {
-      await widget.apiService.createSmartCategoryFromTransaction(
-        transactionId: notification.transactionId!,
-        name: draft.name,
-        plannedMonthly: draft.plannedMonthly,
+      await widget.apiService.bulkCategorizeTransactions(
+        transactionIds: transactionIds,
+        categoryId: category.id,
       );
+      widget.onSmartListChanged?.call();
       if (!mounted) {
         return;
       }
-
-      setState(() {
-        _notifications = _notifications.map((item) {
-          if (item.id != notification.id) {
-            return item;
-          }
-          return item.copyWith(isRead: true);
-        }).toList(growable: false);
-      });
-      widget.onSmartListChanged?.call();
+      await _reloadNotifications();
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '\u0420\u0430\u0441\u0445\u043e\u0434 "${draft.name}" \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d \u0432 Smart List.',
+            transactionIds.length == 1
+                ? 'Расход привязан к категории "${category.name}".'
+                : 'Выбрано ${transactionIds.length} расходов, категория: "${category.name}".',
           ),
         ),
       );
@@ -100,58 +162,99 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } finally {
       if (mounted) {
         setState(() {
-          _savingNotificationId = null;
+          _isSaving = false;
         });
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final groups = _buildGroups();
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('\u0423\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u044f')),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
-        itemCount: groups.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 22),
-        itemBuilder: (context, index) {
-          final group = groups[index];
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 12),
-                child: Text(
-                  group.label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
+  Future<SmartCategory?> _pickCategory(
+    List<SmartCategory> categories,
+    String title,
+  ) {
+    return showModalBottomSheet<SmartCategory>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+          decoration: const BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Выберите существующую Smart List категорию.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: AppTheme.secondaryText,
                   ),
                 ),
-              ),
-              ...group.items.map((notification) {
-                final canAddToSmartList =
-                    notification.canAddToSmartList &&
-                    _savingNotificationId != notification.id;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: NotificationTile(
-                    notification: notification,
-                    onTap: notification.canAddToSmartList
-                        ? () => _openSmartList(notification)
-                        : null,
-                    onAddToSmartList: canAddToSmartList
-                        ? () => _openSmartList(notification)
-                        : null,
+                const SizedBox(height: 18),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: categories.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final category = categories[index];
+                      final remainingColor = category.remaining < 0
+                          ? AppTheme.coral
+                          : AppTheme.secondaryText;
+                      return ListTile(
+                        onTap: () => Navigator.of(context).pop(category),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        tileColor: AppTheme.surfaceSoft,
+                        title: Text(
+                          category.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          'Лимит: ${SomFormatter.amount(category.plannedMonthly)}',
+                        ),
+                        trailing: Text(
+                          _remainingLabel(category.remaining),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: remainingColor,
+                              ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              }),
-            ],
-          );
-        },
-      ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -181,21 +284,104 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     return <_NotificationGroup>[
       if (todayItems.isNotEmpty)
-        _NotificationGroup(
-          label: '\u0421\u0435\u0433\u043e\u0434\u043d\u044f',
-          items: todayItems,
-        ),
+        _NotificationGroup(label: 'Сегодня', items: todayItems),
       if (yesterdayItems.isNotEmpty)
-        _NotificationGroup(
-          label: '\u0412\u0447\u0435\u0440\u0430',
-          items: yesterdayItems,
-        ),
+        _NotificationGroup(label: 'Вчера', items: yesterdayItems),
       if (earlierItems.isNotEmpty)
-        _NotificationGroup(
-          label: '\u0420\u0430\u043d\u0435\u0435',
-          items: earlierItems,
-        ),
+        _NotificationGroup(label: 'Ранее', items: earlierItems),
     ];
+  }
+
+  List<NotificationModel> _buildNotifications(
+    List<NotificationModel>? explicitNotifications,
+    List<TransactionModel> transactions,
+  ) {
+    final notifications = List<NotificationModel>.from(
+      explicitNotifications ?? getMockNotifications(transactions: transactions),
+    );
+    notifications.sort((left, right) => right.timestamp.compareTo(left.timestamp));
+    return notifications;
+  }
+
+  String _remainingLabel(double remaining) {
+    final absolute = SomFormatter.amount(remaining.abs());
+    return remaining < 0 ? '-$absolute' : absolute;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = _buildGroups();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isSelectionMode ? 'Выбрано: ${_selectedTransactionIds.length}' : 'Уведомления'),
+        actions: <Widget>[
+          if (_isSelectionMode)
+            IconButton(
+              onPressed: _isSaving ? null : _assignSelectedTransactions,
+              icon: const Icon(Icons.label_important_outline_rounded),
+              tooltip: 'Привязать к категории',
+            ),
+          if (_isSelectionMode)
+            IconButton(
+              onPressed: _isSaving
+                  ? null
+                  : () => setState(() {
+                      _selectedTransactionIds.clear();
+                    }),
+              icon: const Icon(Icons.close_rounded),
+              tooltip: 'Отменить выбор',
+            ),
+        ],
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+        itemCount: groups.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 22),
+        itemBuilder: (context, index) {
+          final group = groups[index];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 12),
+                child: Text(
+                  group.label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.secondaryText,
+                  ),
+                ),
+              ),
+              ...group.items.map((notification) {
+                final transactionId = notification.transactionId;
+                final selected =
+                    transactionId != null &&
+                    _selectedTransactionIds.contains(transactionId);
+                final canAttach =
+                    notification.canAddToSmartList && !_isSaving;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: NotificationTile(
+                    notification: notification,
+                    selected: selected,
+                    selectionMode: _isSelectionMode,
+                    onTap: canAttach ? () => _handleTap(notification) : null,
+                    onLongPress: canAttach
+                        ? () => _handleLongPress(notification)
+                        : null,
+                    onAddToSmartList:
+                        canAttach && !_isSelectionMode
+                        ? () => _handleTap(notification)
+                        : null,
+                  ),
+                );
+              }),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 

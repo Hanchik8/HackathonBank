@@ -59,60 +59,14 @@ public class DataSeederConfig {
             Random random = new Random(42);
             List<Transaction> transactions = new ArrayList<>();
 
-            seedIncomeTransactions(user, mainAccount, now, transactions);
-            seedExpenseTransactions(user, mainAccount, now, random, transactions);
+            seedRecurringIncomeTransactions(user, mainAccount, now, transactions);
+            seedRecurringBills(user, mainAccount, now, transactions);
+            seedLifestyleExpenses(user, mainAccount, now, random, transactions);
             seedRecentActivity(user, mainAccount, now, transactions);
-            alignMainBalance(user, mainAccount, now, transactions);
-
-            ScheduledPayment rentPayment = scheduledPaymentRepository.save(
-                    new ScheduledPayment(
-                            user,
-                            mainAccount,
-                            "Аренда",
-                            "Landlord",
-                            new BigDecimal("25000.00"),
-                            "Аренда",
-                            "home",
-                            LocalDate.now().plusDays(4),
-                            true,
-                            PaymentStatus.SCHEDULED
-                    )
-            );
-            transactions.add(scheduledTransaction(user, mainAccount, rentPayment));
-
-            ScheduledPayment utilitiesPayment = scheduledPaymentRepository.save(
-                    new ScheduledPayment(
-                            user,
-                            mainAccount,
-                            "Коммунальные",
-                            "БишкекЭнерго",
-                            new BigDecimal("7800.00"),
-                            "Коммунальные",
-                            "home",
-                            LocalDate.now().plusDays(8),
-                            true,
-                            PaymentStatus.SCHEDULED
-                    )
-            );
-            transactions.add(scheduledTransaction(user, mainAccount, utilitiesPayment));
-
-            ScheduledPayment internetPayment = scheduledPaymentRepository.save(
-                    new ScheduledPayment(
-                            user,
-                            mainAccount,
-                            "Интернет",
-                            "HomeNet",
-                            new BigDecimal("3900.00"),
-                            "Подписки",
-                            "subscription",
-                            LocalDate.now().plusDays(11),
-                            true,
-                            PaymentStatus.SCHEDULED
-                    )
-            );
-            transactions.add(scheduledTransaction(user, mainAccount, internetPayment));
+            settleTargetBalanceWithRealisticEntries(user, mainAccount, now, transactions);
 
             transactionRepository.saveAll(transactions);
+            seedUpcomingScheduledPayments(user, mainAccount, scheduledPaymentRepository);
 
             BigDecimal completedNet = transactions.stream()
                     .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
@@ -123,10 +77,10 @@ public class DataSeederConfig {
         };
     }
 
-    private void seedIncomeTransactions(User user,
-                                        Account mainAccount,
-                                        LocalDateTime now,
-                                        List<Transaction> transactions) {
+    private void seedRecurringIncomeTransactions(User user,
+                                                 Account mainAccount,
+                                                 LocalDateTime now,
+                                                 List<Transaction> transactions) {
         transactions.add(transaction(
                 user, mainAccount, null,
                 "Зарплата", "Tech Corp",
@@ -145,11 +99,19 @@ public class DataSeederConfig {
         ));
         transactions.add(transaction(
                 user, mainAccount, null,
-                "Фриланс", "Nova Studio",
-                new BigDecimal("4500.00"),
+                "Подработка", "Nova Studio",
+                new BigDecimal("6200.00"),
                 "Поступления", "income",
                 TransactionType.INCOME, TransactionStatus.COMPLETED,
-                now.minusDays(12).withHour(14).withMinute(10)
+                now.minusMonths(2).withDayOfMonth(27).withHour(14).withMinute(10)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Подработка", "Nova Studio",
+                new BigDecimal("7500.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusMonths(1).withDayOfMonth(25).withHour(15).withMinute(20)
         ));
         transactions.add(transaction(
                 user, mainAccount, null,
@@ -165,41 +127,87 @@ public class DataSeederConfig {
                 new BigDecimal("2400.00"),
                 "Поступления", "income",
                 TransactionType.INCOME, TransactionStatus.COMPLETED,
-                now.minusDays(3).withHour(9).withMinute(25)
+                now.minusDays(24).withHour(9).withMinute(25)
+        ));
+        transactions.add(transaction(
+                user, mainAccount, null,
+                "Перевод от семьи", "Aman",
+                new BigDecimal("1900.00"),
+                "Поступления", "income",
+                TransactionType.INCOME, TransactionStatus.COMPLETED,
+                now.minusDays(33).withHour(20).withMinute(15)
         ));
     }
 
-    private void seedExpenseTransactions(User user,
-                                         Account mainAccount,
-                                         LocalDateTime now,
-                                         Random random,
-                                         List<Transaction> transactions) {
+    private void seedRecurringBills(User user,
+                                    Account mainAccount,
+                                    LocalDateTime now,
+                                    List<Transaction> transactions) {
+        for (int monthsAgo = 2; monthsAgo >= 1; monthsAgo--) {
+            LocalDate month = now.toLocalDate().minusMonths(monthsAgo).withDayOfMonth(1);
+            transactions.add(transaction(
+                    user, mainAccount, null,
+                    "Аренда", "Landlord",
+                    new BigDecimal("-18000.00"),
+                    "Аренда", "home",
+                    TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                    businessDayMoment(month.plusDays(1), 10, 15)
+            ));
+            transactions.add(transaction(
+                    user, mainAccount, null,
+                    "Коммунальные услуги", "БишкекЭнерго",
+                    monthsAgo == 2 ? new BigDecimal("-4650.00") : new BigDecimal("-4920.00"),
+                    "Коммунальные", "utilities",
+                    TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                    businessDayMoment(month.plusDays(4), 11, 40)
+            ));
+            transactions.add(transaction(
+                    user, mainAccount, null,
+                    "Интернет", "HomeNet",
+                    new BigDecimal("-1250.00"),
+                    "Подписки", "subscription",
+                    TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                    businessDayMoment(month.plusDays(7), 9, 30)
+            ));
+            transactions.add(transaction(
+                    user, mainAccount, null,
+                    "Мобильная связь", "O!",
+                    monthsAgo == 2 ? new BigDecimal("-540.00") : new BigDecimal("-580.00"),
+                    "Подписки", "subscription",
+                    TransactionType.PURCHASE, TransactionStatus.COMPLETED,
+                    businessDayMoment(month.plusDays(10), 18, 5)
+            ));
+        }
+    }
+
+    private void seedLifestyleExpenses(User user,
+                                       Account mainAccount,
+                                       LocalDateTime now,
+                                       Random random,
+                                       List<Transaction> transactions) {
         List<TransactionSeed> weekdayPool = List.of(
-                new TransactionSeed("Яндекс.Такси", "Яндекс Go", "Транспорт", "transport", TransactionType.PURCHASE, 180, 1450),
-                new TransactionSeed("Супермаркет", "Пятерочка", "Еда", "food", TransactionType.PURCHASE, 450, 4200),
-                new TransactionSeed("Аптека", "Аптека 312", "Здоровье", "health", TransactionType.PURCHASE, 250, 2400),
-                new TransactionSeed("Обед", "VTS GTS Canteen", "Еда", "food", TransactionType.PURCHASE, 120, 850),
-                new TransactionSeed("Оплата по QR", "Тулпар", "Транспорт", "qr", TransactionType.QR_TRANSFER, 17, 120),
-                new TransactionSeed("Мобильная связь", "O!", "Подписки", "subscription", TransactionType.PURCHASE, 320, 1400),
-                new TransactionSeed("Перевод", "Aigerim", "Переводы", "transfer", TransactionType.TRANSFER, 800, 6500),
-                new TransactionSeed("Маркетплейс", "Wildberries", "Покупки", "shopping", TransactionType.PURCHASE, 1900, 14500)
+                new TransactionSeed("Супермаркет", "Глобус", "Еда", "food", TransactionType.PURCHASE, 450, 3200),
+                new TransactionSeed("Обед", "VTS GTS Canteen", "Еда", "food", TransactionType.PURCHASE, 120, 380),
+                new TransactionSeed("Яндекс Go", "Yandex Go", "Транспорт", "transport", TransactionType.PURCHASE, 180, 900),
+                new TransactionSeed("Оплата по QR", "Тулпар", "Транспорт", "qr", TransactionType.QR_TRANSFER, 17, 75),
+                new TransactionSeed("Аптека", "Аптека 312", "Здоровье", "health", TransactionType.PURCHASE, 230, 1800),
+                new TransactionSeed("Перевод", "Aigerim", "Переводы", "transfer", TransactionType.TRANSFER, 700, 4200),
+                new TransactionSeed("Кофейня", "Coffee Room", "Еда", "food", TransactionType.PURCHASE, 180, 850)
         );
         List<TransactionSeed> weekendPool = List.of(
-                new TransactionSeed("Ресторан", "Navat", "Рестораны", "food", TransactionType.PURCHASE, 1200, 7200),
-                new TransactionSeed("Кино", "Manas Cinema", "Развлечения", "entertainment", TransactionType.PURCHASE, 900, 2800),
-                new TransactionSeed("АЗС", "Газпромнефть", "Транспорт", "transport", TransactionType.PURCHASE, 3200, 9500),
-                new TransactionSeed("Маркетплейс", "Kaspi Shop", "Покупки", "shopping", TransactionType.PURCHASE, 2500, 17000),
-                new TransactionSeed("Кофейня", "Coffee Room", "Еда", "food", TransactionType.PURCHASE, 180, 1300)
+                new TransactionSeed("Ресторан", "Navat", "Рестораны", "food", TransactionType.PURCHASE, 1100, 4600),
+                new TransactionSeed("АЗС", "Газпромнефть", "Транспорт", "transport", TransactionType.PURCHASE, 1800, 6500),
+                new TransactionSeed("Маркетплейс", "Wildberries", "Покупки", "shopping", TransactionType.PURCHASE, 1500, 9500),
+                new TransactionSeed("Кино", "Manas Cinema", "Развлечения", "entertainment", TransactionType.PURCHASE, 700, 1900),
+                new TransactionSeed("Продукты", "Народный", "Еда", "food", TransactionType.PURCHASE, 900, 3600)
         );
 
         LocalDate startDate = now.toLocalDate().minusDays(84);
-        LocalDate endDate = now.toLocalDate().minusDays(5);
+        LocalDate endDate = now.toLocalDate().minusDays(4);
 
         for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
-            if (random.nextDouble() < 0.42) {
-                transactions.add(randomExpense(user, mainAccount, date, weekdayPool, weekendPool, random));
-            }
-            if (random.nextDouble() < 0.16) {
+            int expenseCount = expenseCountFor(date.getDayOfWeek(), random);
+            for (int index = 0; index < expenseCount; index++) {
                 transactions.add(randomExpense(user, mainAccount, date, weekdayPool, weekendPool, random));
             }
         }
@@ -251,33 +259,115 @@ public class DataSeederConfig {
         ));
     }
 
-    private void alignMainBalance(User user,
-                                  Account mainAccount,
-                                  LocalDateTime now,
-                                  List<Transaction> transactions) {
+    private void settleTargetBalanceWithRealisticEntries(User user,
+                                                         Account mainAccount,
+                                                         LocalDateTime now,
+                                                         List<Transaction> transactions) {
         BigDecimal completedNet = transactions.stream()
                 .filter(transaction -> transaction.getStatus() == TransactionStatus.COMPLETED)
                 .map(Transaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal currentBalance = MAIN_START_CAPITAL.add(completedNet);
-        BigDecimal delta = TARGET_MAIN_BALANCE.subtract(currentBalance);
+        BigDecimal delta = TARGET_MAIN_BALANCE.subtract(MAIN_START_CAPITAL.add(completedNet))
+                .setScale(2, RoundingMode.HALF_UP);
         if (delta.signum() == 0) {
             return;
         }
 
-        transactions.add(transaction(
-                user,
-                mainAccount,
-                null,
-                delta.signum() > 0 ? "Возврат после сверки" : "Покупка техники",
-                delta.signum() > 0 ? "MBank Support" : "Technodom",
-                delta,
-                delta.signum() > 0 ? "Поступления" : "Покупки",
-                delta.signum() > 0 ? "income" : "shopping",
-                delta.signum() > 0 ? TransactionType.INCOME : TransactionType.PURCHASE,
-                TransactionStatus.COMPLETED,
-                now.minusHours(2)
+        List<TransactionSeed> expenseTemplates = List.of(
+                new TransactionSeed("Маркетплейс", "Wildberries", "Покупки", "shopping", TransactionType.PURCHASE, 1200, 8000),
+                new TransactionSeed("Подарки", "Детский мир", "Покупки", "shopping", TransactionType.PURCHASE, 900, 6500),
+                new TransactionSeed("Техника для дома", "Technodom", "Покупки", "shopping", TransactionType.PURCHASE, 1800, 14000)
+        );
+        List<TransactionSeed> incomeTemplates = List.of(
+                new TransactionSeed("Подработка", "Nova Studio", "Поступления", "income", TransactionType.INCOME, 1500, 12000),
+                new TransactionSeed("Продажа вещей", "Lalafo", "Поступления", "income", TransactionType.INCOME, 1200, 9000),
+                new TransactionSeed("Перевод от семьи", "Aman", "Поступления", "income", TransactionType.INCOME, 1000, 7000)
+        );
+
+        List<TransactionSeed> templates = delta.signum() < 0 ? expenseTemplates : incomeTemplates;
+        BigDecimal remaining = delta.abs();
+        int index = 0;
+
+        while (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            TransactionSeed seed = templates.get(index % templates.size());
+            BigDecimal chunk = suggestedChunk(seed, remaining);
+            BigDecimal signedAmount = delta.signum() < 0 ? chunk.negate() : chunk;
+            LocalDateTime occurredAt = now.minusDays(9L + (index * 6L))
+                    .withHour(delta.signum() < 0 ? 19 : 13)
+                    .withMinute((12 + index * 11) % 60);
+
+            transactions.add(transaction(
+                    user,
+                    mainAccount,
+                    null,
+                    seed.title,
+                    seed.counterparty,
+                    signedAmount,
+                    seed.category,
+                    seed.iconKey,
+                    seed.type,
+                    TransactionStatus.COMPLETED,
+                    occurredAt
+            ));
+
+            remaining = remaining.subtract(chunk);
+            index++;
+        }
+    }
+
+    private void seedUpcomingScheduledPayments(User user,
+                                               Account mainAccount,
+                                               ScheduledPaymentRepository scheduledPaymentRepository) {
+        scheduledPaymentRepository.saveAll(List.of(
+                new ScheduledPayment(
+                        user,
+                        mainAccount,
+                        "Аренда",
+                        "Landlord",
+                        new BigDecimal("25000.00"),
+                        "Аренда",
+                        "home",
+                        LocalDate.now().plusDays(4),
+                        true,
+                        PaymentStatus.SCHEDULED
+                ),
+                new ScheduledPayment(
+                        user,
+                        mainAccount,
+                        "Коммунальные",
+                        "БишкекЭнерго",
+                        new BigDecimal("7800.00"),
+                        "Коммунальные",
+                        "utilities",
+                        LocalDate.now().plusDays(8),
+                        true,
+                        PaymentStatus.SCHEDULED
+                ),
+                new ScheduledPayment(
+                        user,
+                        mainAccount,
+                        "Интернет",
+                        "HomeNet",
+                        new BigDecimal("3900.00"),
+                        "Подписки",
+                        "subscription",
+                        LocalDate.now().plusDays(11),
+                        true,
+                        PaymentStatus.SCHEDULED
+                )
         ));
+    }
+
+    private int expenseCountFor(DayOfWeek dayOfWeek, Random random) {
+        boolean weekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+        int count = 0;
+        if (random.nextDouble() < (weekend ? 0.62 : 0.48)) {
+            count++;
+        }
+        if (random.nextDouble() < (weekend ? 0.22 : 0.12)) {
+            count++;
+        }
+        return count;
     }
 
     private Transaction randomExpense(User user,
@@ -309,6 +399,11 @@ public class DataSeederConfig {
         );
     }
 
+    private BigDecimal suggestedChunk(TransactionSeed seed, BigDecimal remaining) {
+        BigDecimal preferred = BigDecimal.valueOf(Math.max(seed.minAmount, seed.maxAmount - 600L));
+        return remaining.min(preferred).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private LocalDateTime salaryMoment(LocalDateTime monthAnchor) {
         LocalDate salaryDate = monthAnchor.toLocalDate().withDayOfMonth(15);
         if (salaryDate.getDayOfWeek() == DayOfWeek.SATURDAY) {
@@ -319,20 +414,14 @@ public class DataSeederConfig {
         return salaryDate.atTime(9, 0);
     }
 
-    private Transaction scheduledTransaction(User user, Account account, ScheduledPayment payment) {
-        return transaction(
-                user,
-                account,
-                payment,
-                "Автоплатеж: " + payment.getTitle(),
-                payment.getCounterparty(),
-                payment.getAmount().negate(),
-                payment.getCategory(),
-                payment.getIconKey(),
-                TransactionType.AUTO_PAYMENT,
-                TransactionStatus.SCHEDULED,
-                payment.getDueDate().atTime(9, 0)
-        );
+    private LocalDateTime businessDayMoment(LocalDate date, int hour, int minute) {
+        LocalDate normalized = date;
+        if (normalized.getDayOfWeek() == DayOfWeek.SATURDAY) {
+            normalized = normalized.plusDays(2);
+        } else if (normalized.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            normalized = normalized.plusDays(1);
+        }
+        return normalized.atTime(hour, minute);
     }
 
     private Transaction transaction(User user,

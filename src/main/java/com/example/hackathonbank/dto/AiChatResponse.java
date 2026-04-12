@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 
 public record AiChatResponse(
-        @NotNull @Valid ChatMessageDto message
+        @NotNull @Valid ChatMessageDto message,
+        @Valid AiChatPendingActionDto pendingAction
 ) {
 }

@@ -15,8 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class TransactionService {
@@ -49,7 +51,10 @@ public class TransactionService {
 
     @Transactional(readOnly = true)
     public List<Transaction> getTransactionsForCurrentUser() {
-        return transactionRepository.findByUserIdOrderByOccurredAtDesc(userContextService.getCurrentUser().getId());
+        return transactionRepository.findByUserIdAndStatusOrderByOccurredAtDesc(
+                userContextService.getCurrentUser().getId(),
+                TransactionStatus.COMPLETED
+        );
     }
 
     @Transactional
@@ -121,7 +126,9 @@ public class TransactionService {
                 transaction.getType().name(),
                 transaction.getStatus().name(),
                 transaction.getAccount().getName(),
-                transaction.getOccurredAt()
+                transaction.getOccurredAt(),
+                transaction.getSmartCategory() == null ? null : transaction.getSmartCategory().getId(),
+                transaction.getSmartCategory() == null ? null : transaction.getSmartCategory().getName()
         );
     }
 
@@ -144,6 +151,46 @@ public class TransactionService {
         SmartCategory smartCategory = smartCategoryService.getOwnedCategory(smartCategoryId);
         transaction.setSmartCategory(smartCategory);
         transactionRepository.save(transaction);
+    }
+
+    @Transactional
+    public void assignTransactionsToSmartCategory(List<Long> transactionIds, Long smartCategoryId) {
+        if (transactionIds == null || transactionIds.isEmpty()) {
+            throw new IllegalArgumentException("Нужно выбрать хотя бы одну транзакцию.");
+        }
+
+        List<Long> uniqueIds = transactionIds.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (uniqueIds.isEmpty()) {
+            throw new IllegalArgumentException("Нужно выбрать хотя бы одну корректную транзакцию.");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByUserIdAndIdIn(
+                userContextService.getCurrentUser().getId(),
+                uniqueIds
+        );
+        if (transactions.size() != uniqueIds.size()) {
+            throw new IllegalArgumentException("Часть транзакций не найдена.");
+        }
+
+        SmartCategory smartCategory = smartCategoryId == null
+                ? null
+                : smartCategoryService.getOwnedCategory(smartCategoryId);
+
+        Set<Long> assignedIds = new LinkedHashSet<>();
+        for (Transaction transaction : transactions) {
+            if (transaction.getStatus() != TransactionStatus.COMPLETED || transaction.getAmount().compareTo(BigDecimal.ZERO) >= 0) {
+                throw new IllegalArgumentException("В Smart List можно добавлять только завершенные расходы.");
+            }
+            transaction.setSmartCategory(smartCategory);
+            assignedIds.add(transaction.getId());
+        }
+        if (assignedIds.size() != uniqueIds.size()) {
+            throw new IllegalArgumentException("Не удалось корректно обработать список транзакций.");
+        }
+        transactionRepository.saveAll(transactions);
     }
 
     private BigDecimal normalizeAmount(TransactionType type, BigDecimal amount) {
