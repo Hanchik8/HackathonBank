@@ -68,16 +68,20 @@ public class AiChatService {
         Long userId = userContextService.getCurrentUser().getId();
         String userMessage = request.newMessage().trim();
         List<ChatMessageDto> history = normalizeHistory(request.history());
+        boolean enableTools = shouldEnableTools(userMessage);
 
         String assistantMessage;
         try {
-            assistantMessage = aiCallExecutor.execute(() -> chatClient.prompt()
-                    .system(systemPrompt(contextBuilder.buildContextJson()))
-                    .messages(toMessages(history))
-                    .user(userMessage)
-                    .tools(bankingAgentTools)
-                    .call()
-                    .content());
+            assistantMessage = aiCallExecutor.execute(() -> {
+                ChatClient.ChatClientRequestSpec requestSpec = chatClient.prompt()
+                        .system(systemPrompt(contextBuilder.buildContextJson()))
+                        .messages(toMessages(history))
+                        .user(userMessage);
+                if (enableTools) {
+                    requestSpec = requestSpec.tools(bankingAgentTools);
+                }
+                return requestSpec.call().content();
+            });
         } catch (Exception exception) {
             throw new IllegalStateException("Не удалось получить ответ от ИИ ассистента.", exception);
         }
@@ -85,18 +89,19 @@ public class AiChatService {
         if (!StringUtils.hasText(assistantMessage)) {
             throw new IllegalStateException("Не удалось получить ответ от ИИ ассистента.");
         }
+        String assistantContent = assistantMessage.trim();
 
         AiChatPendingActionDto pendingAction = pendingAiActionService.takeLatestForUser(userId);
         chatMessageRepository.save(new ChatMessage(userId, ChatMessage.Role.USER, userMessage));
-        chatMessageRepository.save(new ChatMessage(userId, ChatMessage.Role.ASSISTANT, assistantMessage.trim()));
+        chatMessageRepository.save(new ChatMessage(userId, ChatMessage.Role.ASSISTANT, assistantContent));
 
-        return new AiChatResponse(new ChatMessageDto("assistant", assistantMessage.trim()), pendingAction);
+        return new AiChatResponse(new ChatMessageDto("assistant", assistantContent), pendingAction);
     }
 
     @Transactional
     public AiChatResponse resolveAction(AiChatActionRequest request) {
         if (request == null || !StringUtils.hasText(request.token())) {
-            throw new IllegalArgumentException("Токен действия AI обязателен.");
+            throw new IllegalArgumentException("Токен действия ИИ обязателен.");
         }
 
         PendingAiActionService.PendingAiAction action = pendingAiActionService.consume(request.token().trim());
@@ -164,14 +169,44 @@ public class AiChatService {
         return messages;
     }
 
+    private boolean shouldEnableTools(String userMessage) {
+        String normalized = userMessage.toLowerCase(Locale.ROOT);
+        return normalized.contains("smart list")
+                || normalized.contains("смарт")
+                || normalized.contains("категор")
+                || normalized.contains("лимит")
+                || normalized.contains("создай")
+                || normalized.contains("добавь")
+                || normalized.contains("измени")
+                || normalized.contains("обнови")
+                || normalized.contains("удали")
+                || normalized.contains("перенеси плат")
+                || normalized.contains("отложи плат")
+                || normalized.contains("переведи")
+                || normalized.contains("перевод")
+                || normalized.contains("с накоп")
+                || normalized.contains("из накоп");
+    }
+
     private String systemPrompt(String contextJson) {
         return """
-                Ты персональный финансовый советник банка. Опирайся строго на переданный финансовый контекст пользователя: %s
-                По запросу пользователя можешь управлять Smart List через доступные инструменты: создавать категории, менять лимиты и удалять категории.
-                Для удаления Smart List категории сначала инициируй удаление через инструмент, затем дождись подтверждения пользователя.
-                Используй инструменты только когда пользователь явно просит изменить Smart List или выполнить действие.
-                Если вопрос про траты, лимиты или бюджет, учитывай текущий остаток по Smart List и объясняй решение простым языком.
-                Отвечай естественно, без шаблонных приветствий и без выдуманных фактов.
+                Ты персональный финансовый советник банка.
+                Опирайся строго на финансовый контекст пользователя ниже и не выдумывай факты:
+                %s
+
+                Помогай с личными финансами простым языком:
+                - объясняй текущее состояние денег, баланса, трат и лимитов;
+                - давай практичные советы по накоплениям, бюджету и безопасным расходам;
+                - если видишь риск кассового разрыва, предупреждай об этом прямо и предлагай конкретные шаги.
+
+                Инструменты используй только когда пользователь явно просит выполнить действие:
+                - создать, изменить или удалить категорию Smart List;
+                - перевести деньги из накоплений;
+                - перенести ближайший платеж.
+
+                Для удаления категории Smart List сначала инициируй действие через инструмент и дождись подтверждения пользователя.
+                Если вопрос только про совет, анализ или план накопления, отвечай без вызова инструментов.
+                Отвечай естественно, без шаблонных приветствий и без лишней воды.
                 """.formatted(contextJson);
     }
 }
