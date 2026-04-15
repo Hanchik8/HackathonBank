@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -98,9 +99,10 @@ class AiChatControllerIntegrationTests {
         @SuppressWarnings("unchecked")
         List<Message> messages = captor.getValue();
         assertThat(messages).hasSize(2);
-        verify(requestSpec).system(org.mockito.ArgumentMatchers.contains("финансовый контекст"));
+        verify(requestSpec).system(org.mockito.ArgumentMatchers.contains("финансовый контекст пользователя"));
         verify(requestSpec).system(org.mockito.ArgumentMatchers.contains("\"balances\""));
         verify(requestSpec).user("Что делать с деньгами до зарплаты?");
+        verify(requestSpec, never()).tools(any(Object[].class));
     }
 
     @Test
